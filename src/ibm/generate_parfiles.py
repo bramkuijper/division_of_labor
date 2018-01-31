@@ -163,16 +163,22 @@ def expand_grid(data_dict):
 
     # calculate total product of data frame
     rows = itertools.product(*data_dict.values())
+    
+    return(pd.DataFrame([row for row in rows],
+        columns=data_dict.keys(),
+        dtype=object))
 
     return(pd.DataFrame.from_records(
         rows,
-        columns=data_dict.keys()))
+        columns=data_dict.keys(),
+        dtype=object))
 
+maxtime = 10 
 # make a dictionary of all the parameters
 pardict = {
         "N":[100], # number of workers / colony
-        "Col": [5,10], # number of colonies
-        "maxtime": [10], # time steps work is performed before reproduction
+        "Col": [5, 10], # number of colonies
+        "maxtime": [maxtime], # time steps work is performed before reproduction
         "meanT1" : [ 1.0 ], # mean threshold for each task
         "meanT2" : [ 1.0 ], # mean threshold for each task
         "delta1" : [ 1.0 ], # mean threshold for each task
@@ -183,33 +189,32 @@ pardict = {
         "alpha_min_2" : [ 3.3e-05 ], # minimum work efficiency task 1
         "beta_1" : [ 3.3e-05 ], # stimulus decay task 1
         "beta_2" : [ 3.3e-05 ], # stimulus decay task 2 
-        "delta2" : [ 1.0 ], # mean threshold for each task
         "p": [0.2], # quitting probability
         "mutp" : [0.01], # mutation probability
         "maxgen" : [5], # number of generations 
         "beta_fit" : [1.0], # exponent task 1 (not used)
-        "gamma_fit" : [1.0], # exponent task 1 (not used)
+        "gamma_fit" : [1.0], # exponent task 2 (not used)
         "recomb" : [0.5], # recombination rate
         "timecost" : [0], # duration-dependent switching cost
         "mutstep" : [0.1], # standard deviation of mutational distribution
-        "initStim" : [0.1], # initial level of the stimulus
+        "initStim" : [0.3], # initial level of the stimulus
         "p_wait" : [0.1], # probability that ant has to wait c time steps before switching
-        "tau" : [0.1], # 
+        "tau" : [int(0.5 * maxtime)], # 
         "initForget" : [0.1], # 
         "initLearn" : [0.1], # 
-        "step_gain_exp" : [0.1], # 
+        "step_gain_exp" : [0.2], # 
         "step_lose_exp" : [0.1], # 
         "K" : [0.1]
 }
 
 all_combinations = expand_grid(pardict)
 
+
 all_combinations["seed"] = np.random.randint(
         low = 0, 
         high = 2147483646,
         size = all_combinations.shape[0])
 
-print(all_combinations.describe())
 
 # make an instance of the rungenerator class
 rg = RunGenerator(

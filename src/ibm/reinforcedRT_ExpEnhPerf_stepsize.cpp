@@ -146,8 +146,8 @@ Sexuals mySexuals;
 vector <int> parentCol;
 
 // some stats
-double sum_Fit;
-int simstart_generation;
+double sum_Fit = 0;
+int simstart_generation = 0;
 
 // if one big simulation is broken up into several 'parts' (e.g., because it takes very long)
 // denote the current part
@@ -178,17 +178,23 @@ istream & Params::InitParams(istream & in)
     alfa_min.reserve(tasks);
     beta.reserve(tasks);
 
+    cout << N << ";" << Col << ";" << maxtime << endl;
+
     // read in parameter values from the input stream (file)
     in >> N >> // 
         Col >> // number of colonies
         maxtime;  // number of timesteps work is performed before reproduction
-    
+   
+    cout << N << ";" << Col << ";" << maxtime << endl;
+
+    cout << maxtime << endl;
     double tmp;
 
     // get initial threshold values for each task
-    for (int i=0; i<tasks; i++) 
+    for (int i = 0; i < tasks; ++i) 
     {
         in >> tmp; 
+        cout << tmp << endl;
         meanT.push_back(tmp);
     }
 
@@ -230,7 +236,7 @@ istream & Params::InitParams(istream & in)
         mutstep >> // standard deviation of mutational distribution
         initStim >> // initial level of the stimulus
         p_wait >> // probability that ant has to wait c time steps before switching
-        tau >>
+        tau >> // timestep from which fitness is counted
         initForget >>
         initLearn >>
         step_gain_exp >>
@@ -351,40 +357,55 @@ void ShowAnts(Colony & anyCol)
 
 //--------------------------------------------------------------------------------
 void ShowParams(Params & Par)
-        {
-         cout <<"Workers " << Par.N << endl;
-         cout << "Colonies " << Par.Col << endl;
-         cout << "Timesteps " << Par.maxtime << endl;
-         
-         for (int task=0; task<Par.tasks; task++)
-            cout << "Initial T" <<task <<"\t" << Par.meanT[task] << endl;
-         
-         for (int task=0; task<Par.tasks; task++)
-            cout << "Delta " <<task <<"\t"  << Par.delta[task] << endl;
-         
-         for (int task=0; task<Par.tasks; task++)
-            cout << "max effic " << task << "\t" << Par.alfa_max[task] << endl;
-         
-         for (int task=0; task<Par.tasks; task++)
-            cout << "min effic " << task << "\t" << Par.alfa_min[task] << endl;
-         for (int task=0; task<Par.tasks; task++)
-            cout << "Decay " << task << "\t" << Par.beta[task] << endl;
-         
-         cout << "prob quit" << Par.p << endl;
-         cout << "Task number " << Par.tasks << endl;
-         cout << "mut prob " << Par.mutp << endl;
-         cout << "Max gen " <<  Par.maxgen << endl;
-         cout << "Exp task 1 " <<  Par.beta_fit << endl;
-         cout << "Exp task 2 " <<  Par.gamma_fit << endl;
-         cout << "seed " << Par.seed << endl;
-         cout << "recombination " << Par.recomb << endl;
-         cout << "timecost " << Par.timecost << endl;
-         cout << "tau " << Par.tau << endl;
-         cout << "initial Learn " << Par.initLearn << endl;
-         cout << "initial Forget " << Par.initForget << endl;
-         cout << "stepsize gain exp " << Par.step_gain_exp << endl;
-         cout << "stepsize to lose exp " << Par.step_lose_exp << endl;
-        }
+{
+    cout << "Workers " << Par.N << endl;
+    cout << "Colonies " << Par.Col << endl;
+    cout << "Timesteps " << Par.maxtime << endl;
+
+    for (int task=0; task<Par.tasks; task++)
+    {
+        cout << "Initial T" <<task <<"\t" << Par.meanT[task] << endl;
+    }
+
+    for (int task=0; task<Par.tasks; task++)
+    {
+        cout << "Delta " <<task <<"\t"  << Par.delta[task] << endl;
+    }
+
+    for (int task=0; task<Par.tasks; task++)
+    {
+        cout << "max effic " << task << "\t" << Par.alfa_max[task] << endl;
+    }
+
+    for (int task=0; task<Par.tasks; task++)
+    {
+        cout << "min effic " << task << "\t" << Par.alfa_min[task] << endl;
+    }
+
+    for (int task=0; task<Par.tasks; task++)
+    {
+        cout << "Decay " << task << "\t" << Par.beta[task] << endl;
+    }
+
+    cout << "prob quit" << Par.p << endl;
+    cout << "Task number " << Par.tasks << endl;
+    cout << "mut prob " << Par.mutp << endl;
+    cout << "Max gen " <<  Par.maxgen << endl;
+    cout << "Exp task 1 " <<  Par.beta_fit << endl;
+    cout << "Exp task 2 " <<  Par.gamma_fit << endl;
+    cout << "seed " << Par.seed << endl;
+    cout << "recombination " << Par.recomb << endl;
+    cout << "timecost " << Par.timecost << endl;
+    cout << "mutstep " << Par.mutstep << endl;
+    cout << "tau " << Par.tau << endl;
+    cout << "initial Stimulus " << Par.initStim << endl;
+    cout << "p_wait " << Par.p_wait << endl;
+    cout << "initial Learn " << Par.initLearn << endl;
+    cout << "initial Forget " << Par.initForget << endl;
+    cout << "stepsize gain exp " << Par.step_gain_exp << endl;
+    cout << "stepsize to lose exp " << Par.step_lose_exp << endl;
+    cout << "K" << Par.K << endl;
+}
 //========================================================================================
 // Function to initialize founders with their own thresholds and Learn and Forget parameters
 void InitFounders(Population &Pop, Params &Par)
@@ -1227,36 +1248,45 @@ void WriteLastGen(int generation, Params & Par, Population & Pop)
         }
 } // end of WriteLastGen
 //========================================================================================================
-void NameDataFiles(string & data1, string &data2, string &data3, string &data4, string &data5, string &data6, string &dataant)
-	{
-		stringstream tmp;
-		tmp << "data_work_alloc_" << simpart << ".txt";
-		data1 = tmp.str();
+//
+// give names to each of the datafiles
+void NameDataFiles(
+        string &data1, 
+        string &data2, 
+        string &data3, 
+        string &data4, 
+        string &data5, 
+        string &data6, 
+        string &dataant)
+{
+    stringstream tmp;
+    tmp << "data_work_alloc_" << simpart << ".txt";
+    data1 = tmp.str();
 
-		stringstream tmp2;
-		tmp2 << "allele_distrib_" << simpart << ".txt";
-		data2 = tmp2.str();
+    stringstream tmp2;
+    tmp2 << "allele_distrib_" << simpart << ".txt";
+    data2 = tmp2.str();
 
-		stringstream tmp3;
-		tmp3 << "f_dist_" << simpart << ".txt";
-		data3 = tmp3.str();
-	
-		stringstream tmp4;
-		tmp4 << "branch.txt";
-		data4 = tmp4.str();
-	
-		stringstream tmp5;
-		tmp5 << "data_1gen_" << simpart << ".txt";
-		data5 = tmp5.str();
+    stringstream tmp3;
+    tmp3 << "f_dist_" << simpart << ".txt";
+    data3 = tmp3.str();
 
-		stringstream tmp6;
-		tmp6 << "thresholds_" << simpart << ".txt";
-		data6 = tmp6.str();
+    stringstream tmp4;
+    tmp4 << "branch.txt";
+    data4 = tmp4.str();
 
-		stringstream tmp7;
-		tmp7 << "ant_beh_" << simpart << ".txt";
-		dataant = tmp7.str();
-	}
+    stringstream tmp5;
+    tmp5 << "data_1gen_" << simpart << ".txt";
+    data5 = tmp5.str();
+
+    stringstream tmp6;
+    tmp6 << "thresholds_" << simpart << ".txt";
+    data6 = tmp6.str();
+
+    stringstream tmp7;
+    tmp7 << "ant_beh_" << simpart << ".txt";
+    dataant = tmp7.str();
+}
 //=====================================================================================================
 
 // is this a continuation of a previous run, yes or no?
@@ -1296,7 +1326,12 @@ bool Check_Spec(Population & Pop)
 } // end of Check_Spec
 
 //-------------------------------------------------------------------------------------------------------
-void Write_Col_Data(ofstream & mydata, Params & Par, Population & Pop, int gen, int colony)
+void Write_Col_Data(
+        ofstream & mydata,
+        Params & Par,
+        Population & Pop,
+        int gen,
+        int colony)
 {
     //cout << "write col data " << endl;
 	mydata << gen << "\t" << colony << "\t";
@@ -1314,7 +1349,13 @@ void Write_Col_Data(ofstream & mydata, Params & Par, Population & Pop, int gen, 
 	    << endl;  
 }
 //------------------------------------------------------------------------------------------------------
-void Write_Alleles_Spec(ofstream & data_reinforcement,  ofstream & data_f, Params & Par, Population & Pop, int gen, int colony)
+void Write_Alleles_Spec(
+        ofstream & data_reinforcement,
+        ofstream & data_f,
+        Params & Par,
+        Population & Pop,
+        int gen,
+        int colony)
 {
     //cout << "write alleles and spec " << endl;
 	 // output only thresholds of foundresses and mean specialization 
@@ -1336,7 +1377,9 @@ void Write_Alleles_Spec(ofstream & data_reinforcement,  ofstream & data_f, Param
 } 
 
 //====================================================================================================
-void Write_Branching(ofstream & afile, Params & Par, int yesno)
+void Write_Branching(ofstream & afile,
+        Params & Par,
+        int yesno)
 {
 	afile << Par.mutp << ";" 
 		<< Par.mutstep << ";" 
@@ -1344,7 +1387,11 @@ void Write_Branching(ofstream & afile, Params & Par, int yesno)
 		<< yesno << endl;	
 }	
 //====================================================================================================
-void WriteBranchFile(Population & Pop, int generation, Params & Par,ofstream &file4, string filename)
+void WriteBranchFile(Population & Pop,
+        int generation, 
+        Params & Par,
+        ofstream &file4,
+        string filename)
 	{ 
 	file4.open(filename.c_str());
 	if (Check_Spec(Pop))
@@ -1365,6 +1412,8 @@ void WriteBranchFile(Population & Pop, int generation, Params & Par,ofstream &fi
 
 
 //==============================================================================================================================================
+
+// add headers to the data files
 void Header_data(ofstream & header, ofstream & header2)
 {
 	    header << "Gen" << "\t" 
@@ -1393,29 +1442,46 @@ void Header_data(ofstream & header, ofstream & header2)
 #endif   
 }
 //=======================================================================================================================
-void WriteData_1Gen(ofstream & mydata, Population & Pop, Params & Par, int timestep)
+//
+//
+//writing data of last generation step by step!
+void WriteData_1Gen(ofstream & mydata, 
+        Population & Pop, 
+        Params & Par, 
+        int timestep)
 {
-        //cout << "writing data of last generation step by step!" << endl;
-        for (unsigned int col = 0; col < Pop.size(); col++)
-            {
-            mydata << timestep << ";" << col << ";"; 
-            
-            for (int task=0; task<Par.tasks; task++)
-                mydata <<Pop[col].stim[task] << ";"; 
-            
-            for (int task=0; task<Par.tasks; task++)
-                mydata << Pop[col].numacts_step[task] << ";";
-            
-            mydata << Pop[col].fitness << ";" << 
-                     Pop[col].mean_F_franjo <<endl; 
-            }
+    // loop through all colonies and write stats
+    for (unsigned int col = 0; col < Pop.size(); ++col)
+    {
+        // print timestep and colony number
+        mydata << timestep << ";" << col << ";"; 
+
+        // plot the perceived stimulus levels per task
+        for (unsigned int task=0; task < Par.tasks; ++task) 
+        {
+            mydata << Pop[col].stim[task] << ";"; 
+        }
+
+        // plot the number of acts for each task
+        for (unsigned int task=0; task<Par.tasks; task++) 
+        {
+            mydata << Pop[col].numacts_step[task] << ";";
+        }
+
+        // write down colony fitness and specialization values
+        mydata << Pop[col].fitness << ";" 
+            << Pop[col].mean_F_franjo << endl; 
+    }
 }
 //==========================================================================================================================
+
+// write down individual ants
 void WriteAntsBeh(Population & Pop, ofstream & mydata) 
 {
-    for(unsigned int col = 0; col < Pop.size(); col ++)
-        for (unsigned int ant=0; ant < Pop[col].MyAnts.size(); ant++)
-            {
+    for (unsigned int col = 0; col < Pop.size(); ++col)
+    {
+        for (unsigned int ant = 0; ant < Pop[col].MyAnts.size(); ++ant)
+        {
             mydata << col << ";" << ant << ";" 
                 << Pop[col].MyAnts[ant].threshold[0] << ";" 
                 << Pop[col].MyAnts[ant].threshold[1] << ";" 
@@ -1427,15 +1493,17 @@ void WriteAntsBeh(Population & Pop, ofstream & mydata)
                 << Pop[col].MyAnts[ant].alfa[1] << ";" 
                 << Pop[col].MyAnts[ant].switches << ";"
                 << Pop[col].MyAnts[ant].workperiods << endl;  
-            }
+        }
+    }
 }
 //=========================================================================================================
+// writing ants' thresholds 
 void WriteAntsThresholds(Population & Pop, ofstream & mydata, int timestep, int gen) 
 {
-    //cout << "writing Ants thresholds " << endl;
-    for(unsigned int col = 0; col < Pop.size(); col ++)
-        for (unsigned int ant=0; ant < Pop[col].MyAnts.size(); ant++)
-            {
+    for (unsigned int col = 0; col < Pop.size(); ++col)
+    {
+        for (unsigned int ant = 0; ant < Pop[col].MyAnts.size(); ++ant)
+        {
             mydata << gen << ";" << timestep << ";" << col << ";" << Pop[col].MyAnts[ant].ID_ant << ";" 
                 << Pop[col].MyAnts[ant].threshold[0] << ";" 
                 << Pop[col].MyAnts[ant].threshold[1] << ";" 
@@ -1445,20 +1513,24 @@ void WriteAntsThresholds(Population & Pop, ofstream & mydata, int timestep, int 
                 << Pop[col].MyAnts[ant].experience_points[1] << ";"
                 << Pop[col].MyAnts[ant].alfa[0] << ";"
                 << Pop[col].MyAnts[ant].alfa[1] << endl; 
-
-            }
+        }
+    }
 }
 //================================================================================
 int main(int argc, char* argv[])
 {
     // initialize object to store all parameters
 	Params myPars;
-
+    
     // get parameters from file
 	ifstream inp("params.txt");
 
     // add these parameters to parameter object
 	myPars.InitParams(inp);
+
+    ShowParams(myPars);
+
+    cout << "ok done" << endl;
     
     // set up the random number generators
     // (from the gnu gsl library)
@@ -1479,11 +1551,25 @@ int main(int argc, char* argv[])
     Continue_Previous_Run_Yes_No(myPars, MyColonies);
 
     // all the files to which data is written to
-	string datafile1, datafile2, datafile3, datafile4, datafile5, datafile6, dataants;
+	string datafile1, 
+           datafile2, 
+           datafile3, 
+           datafile4, 
+           datafile5, 
+           datafile6, 
+           dataants;
 
     // function to give the datafiles particular names
-	NameDataFiles(datafile1, datafile2, datafile3, datafile4, datafile5, datafile6, dataants);
-	    
+	NameDataFiles(
+            datafile1, 
+            datafile2, 
+            datafile3, 
+            datafile4, 
+            datafile5, 
+            datafile6, 
+            dataants);
+
+    // the corresponding output files
 	static ofstream out1; 
 	static ofstream out2;
 	static ofstream out3;
@@ -1493,16 +1579,20 @@ int main(int argc, char* argv[])
     static ofstream header1;
     static ofstream header2;
 	static ofstream out_ants;
-	
-	if(myPars.Col>1) 
-	    {
-	    out1.open(datafile1.c_str());
+
+    // more than one colony, so..
+	if (myPars.Col > 1) 
+    {
+        out1.open(datafile1.c_str());
+
         header1.open("header_1.txt");
+
 #ifdef WRITE_LASTGEN_PERSTEP 
         header2.open("header2.txt");
 #endif
+
         Header_data(header1, header2);
-	    }
+    }
 	    
 	out2.open(datafile2.c_str());
 	out3.open(datafile3.c_str());    
@@ -1513,82 +1603,88 @@ int main(int argc, char* argv[])
     out6.open(datafile6.c_str());
 #endif
 
-	for (int g= simstart_generation; g < simstart_generation + myPars.maxgen; g++)
-		{
-	//	cout << "Generation " << g << endl;
+    int maxgen = simstart_generation + myPars.maxgen;
 
-		Init(MyColonies, myPars);
-		//cout<< "Colonies initialized" << endl;
-		//mygetch();
-		double equil_steps=0;
+    cout << maxgen << endl;
+    cout << myPars.maxgen << endl;
+    cout << simstart_generation << endl;
 
-	#ifdef DEBUG
-		cout << MyColonies.size() <<endl;
-		cout <<myPars.maxtime << endl;
+	for (int g = simstart_generation; g < maxgen; ++g)
+    {
+        cout << "Generation " << g << endl;
 
-	#endif
+        Init(MyColonies, myPars);
+        cout<< "Colonies initialized" << endl;
 
-        // timesteps during colony development
-		for (int k = 0; k < myPars.maxtime; k++)
-		    {
-                // update all the stimuli of the ants and what they are doing
-		    UpdateAnts(MyColonies, myPars);
+        double equil_steps=0;
 
-            // calculate specialization values
-		    Calc_F(MyColonies, myPars); 
+#ifdef DEBUG
+    cout << MyColonies.size() <<endl;
+    cout <<myPars.maxtime << endl;
 
-            // update statistics
-		    Update_Col_Data(k, MyColonies, myPars, equil_steps);	
-
-            // calculate at the end of the timestep: the ants have done something
-            // which has consequences for stimulus levels, which you update here
-		    UpdateStim(MyColonies, myPars);
-		    
-		    if (k == myPars.maxtime-1)
-                 {
-                 CalcFitness(MyColonies, myPars);
-
-                // write everything down every 100th timestep
-                 if ((g<=100 || g%100==0) && myPars.Col>1)
-                    {
-                    //cout <<  "Generation " << g << endl;
-                    for (unsigned int col = 0; col < MyColonies.size(); col++)
-                        {
-                            for (int task=0; task<myPars.tasks; task++)
-                                MyColonies[col].mean_work_alloc[task]/=equil_steps;
-                            Write_Col_Data(out1, myPars, MyColonies, g, col);
-                            Write_Alleles_Spec(out2, out3, myPars, MyColonies, g, col);
-                             
-                        } // end of for colonies
-                     } // end if generations are right
-
-                 } // end if k=maxtime
-
-            //do you want to write out the last generation step by step?
-#ifdef WRITE_LASTGEN_PERSTEP
-            
-            if(g == simstart_generation+myPars.maxgen-1) 
-                {
-                    //cout << " writing last generation data " << endl;
-                    WriteData_1Gen(out5, MyColonies, myPars, k);
-       //             WriteAntsThresholds(MyColonies, out6, k, g);
-                    if(k == myPars.maxtime -1)
-                        {	
-                        WriteAntsBeh(MyColonies, out_ants);	
-                        }
-                    //cout << "done with writing last generation data " << endl;
-                }
 #endif
-		    } // end of for k time steps
-// one colony only
-        WriteLastGen(g, myPars, MyColonies);
-	WriteBranchFile(MyColonies, g, myPars, out4, datafile4);
-        if(g < myPars.maxgen -1)
-            {
-		    MakeSexuals(MyColonies, myPars);
 
-		    MakeColonies(MyColonies);
+    // timesteps during colony development
+    for (int k = 0; k < myPars.maxtime; k++)
+        {
+            // update all the stimuli of the ants and what they are doing
+        UpdateAnts(MyColonies, myPars);
+
+        // calculate specialization values
+        Calc_F(MyColonies, myPars); 
+
+        // update statistics
+        Update_Col_Data(k, MyColonies, myPars, equil_steps);	
+
+        // calculate at the end of the timestep: the ants have done something
+        // which has consequences for stimulus levels, which you update here
+        UpdateStim(MyColonies, myPars);
+        
+        if (k == myPars.maxtime-1)
+             {
+             CalcFitness(MyColonies, myPars);
+
+            // write everything down every 100th timestep
+             if ((g<=100 || g%100==0) && myPars.Col>1)
+                {
+                //cout <<  "Generation " << g << endl;
+                for (unsigned int col = 0; col < MyColonies.size(); col++)
+                    {
+                        for (int task=0; task<myPars.tasks; task++)
+                            MyColonies[col].mean_work_alloc[task]/=equil_steps;
+                        Write_Col_Data(out1, myPars, MyColonies, g, col);
+                        Write_Alleles_Spec(out2, out3, myPars, MyColonies, g, col);
+                         
+                    } // end of for colonies
+                 } // end if generations are right
+
+             } // end if k=maxtime
+
+        //do you want to write out the last generation step by step?
+#ifdef WRITE_LASTGEN_PERSTEP
+        
+        if(g == simstart_generation+myPars.maxgen-1) 
+            {
+                //cout << " writing last generation data " << endl;
+                WriteData_1Gen(out5, MyColonies, myPars, k);
+   //             WriteAntsThresholds(MyColonies, out6, k, g);
+                if(k == myPars.maxtime -1)
+                    {	
+                    WriteAntsBeh(MyColonies, out_ants);	
+                    }
+                //cout << "done with writing last generation data " << endl;
             }
-		} // end for generations
+#endif
+        } // end of for k time steps
+// one colony only
+    WriteLastGen(g, myPars, MyColonies);
+WriteBranchFile(MyColonies, g, myPars, out4, datafile4);
+    if(g < myPars.maxgen -1)
+        {
+        MakeSexuals(MyColonies, myPars);
+
+        MakeColonies(MyColonies);
+        }
+    } // end for generations
 
 }
