@@ -186,6 +186,7 @@ pardict = {
         "maxgen" : [5], # number of generations 
         "beta_fit" : [1.0], # exponent task 1 (not used)
         "gamma_fit" : [1.0], # exponent task 1 (not used)
+        "recomb" : [0.5], # recombination rate
 }
 
 
