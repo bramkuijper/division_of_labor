@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
-# generates parameter files for the reinforced threshold model
+# generates the parameter files to run the simulations of the evolutionary
+# reinforced threshold model
 
 
 
@@ -9,7 +10,9 @@ import itertools
 import datetime
 import shutil
 import re
+import sys
 import pandas as pd
+import numpy as np
 from pathlib import Path
 
 
@@ -156,14 +159,14 @@ class RunGenerator:
 
     # make all possible combinations of parameter values
     # see http://pandas.pydata.org/pandas-docs/version/0.14/cookbook.html#creating-example-data 
-def expand_grid(self):
+def expand_grid(data_dict):
 
     # calculate total product of data frame
-    rows = itertools.product(*self.data_dict.values())
+    rows = itertools.product(*data_dict.values())
 
     return(pd.DataFrame.from_records(
         rows,
-        columns=self.data_dict.keys()))
+        columns=data_dict.keys()))
 
 # make a dictionary of all the parameters
 pardict = {
@@ -187,12 +190,30 @@ pardict = {
         "beta_fit" : [1.0], # exponent task 1 (not used)
         "gamma_fit" : [1.0], # exponent task 1 (not used)
         "recomb" : [0.5], # recombination rate
+        "timecost" : [0], # duration-dependent switching cost
+        "mutstep" : [0.1], # standard deviation of mutational distribution
+        "initStim" : [0.1], # initial level of the stimulus
+        "p_wait" : [0.1], # probability that ant has to wait c time steps before switching
+        "tau" : [0.1], # 
+        "initForget" : [0.1], # 
+        "initLearn" : [0.1], # 
+        "step_gain_exp" : [0.1], # 
+        "step_lose_exp" : [0.1], # 
+        "K" : [0.1]
 }
 
+all_combinations = expand_grid(pardict)
+
+all_combinations["seed"] = np.random.randint(
+        low = 0, 
+        high = 2147483646,
+        size = all_combinations.shape[0])
+
+print(all_combinations.describe())
 
 # make an instance of the rungenerator class
 rg = RunGenerator(
-        data_dict=pardict,
+        all_run_combinations = all_combinations, 
         dest_dir="/home/bram/",
         exe="xreinforcedRT"
         )

@@ -148,7 +148,10 @@ vector <int> parentCol;
 // some stats
 double sum_Fit;
 int simstart_generation;
-int simpart;
+
+// if one big simulation is broken up into several 'parts' (e.g., because it takes very long)
+// denote the current part
+int simpart; 
 
 
 int mygetch(void)
@@ -223,10 +226,10 @@ istream & Params::InitParams(istream & in)
         beta_fit >> // exponent of the first task in fitness function
         gamma_fit >> // exponent of the second task in fitness function
         recomb >> // recombination rate
-        timecost>> // 
-        mutstep >>
-        initStim >>
-        p_wait >>
+        timecost>> // switching cost dependent on the time the task is performed
+        mutstep >> // standard deviation of mutational distribution
+        initStim >> // initial level of the stimulus
+        p_wait >> // probability that ant has to wait c time steps before switching
         tau >>
         initForget >>
         initLearn >>
@@ -805,27 +808,31 @@ void WantTask ( Params Par, Colony & anyCol, Ant & anyAnt)
 //end WantTask
 //-----------------------------------------------------------------------------
 
-// evulate whether ant should switch tasks
+// evaluate whether ant should switch tasks
 void EvalTaskSwitch(Params & Par, Colony & anyCol, Ant & anyAnt,int myjob)
 {
+    // if it was doing this job previously 
+    // or it did not do anything before
+    // just perform the task
     if (myjob == anyAnt.last_act || anyAnt.last_act == 7) 
     {
         DoTask(Par, anyCol, anyAnt, myjob);
     }
-    else 
+    else  // ok, ant <is doing a different task than dei
+    {
+        // with a certain probability 
+        if (Par.p_wait >= gsl_rng_uniform(rng_r) 
+                && anyAnt.count_time < Par.timecost)    
         {
-              if (Par.p_wait >= gsl_rng_uniform(rng_r) && anyAnt.count_time < Par.timecost)    
-                    {
-                    //cout << "Ant wants to change task!" << endl;    
-                    anyAnt.curr_act=2; // stays idle for as long as count_time<timecost    
-                    anyAnt.count_time ++;
-                    }
-                else
-                    {
-                    DoTask(Par, anyCol, anyAnt, myjob);
-                    }
+            //cout << "Ant wants to change task!" << endl;    
+            anyAnt.curr_act=2; // stays idle for as long as count_time<timecost    
+            ++anyAnt.count_time;
         }
-        
+        else
+        {
+            DoTask(Par, anyCol, anyAnt, myjob);
+        }
+    }
 }
 //end EvalTaskSwitch
 //-------------------------------------------------------------------------------
@@ -1252,18 +1259,23 @@ void NameDataFiles(string & data1, string &data2, string &data3, string &data4, 
 	}
 //=====================================================================================================
 
-void START_SIM (Params & Par, Population & Pop) 
+// is this a continuation of a previous run, yes or no?
+// if yes, read in the last generation of the previous run and start from there
+// if no, just initialize everything
+void Continue_Previous_Run_Yes_No(Params & Par, Population & Pop) 
 {
+    // if a lastgen.txt file is present in the current directory
+    // this means it is a continuation of an older run 
 	if (FileExists("lastgen.txt"))
-		{
-		ifstream inp("lastgen.txt");
-		StartFromLast(inp, Par, Pop);
-		}
+    {
+        ifstream inp("lastgen.txt");
+        StartFromLast(inp, Par, Pop);
+    }
 	else 
-		{
-		simpart = 1;
-		simstart_generation = 0; 
-		}
+    {
+        simpart = 1; 
+        simstart_generation = 0; 
+    }
 }
 //=====================================================================================================
 
@@ -1459,12 +1471,17 @@ int main(int argc, char* argv[])
 	Population MyColonies;
 	InitFounders(MyColonies, myPars);
 
-	// code that checks which run this is
-	// is lastgen.txt present y/n
-    START_SIM(myPars, MyColonies);
+    // this simulation run might a a continuation of a previous 
+    // simulation, for example when that simulation was broken off
+    // prematurely. This function checks whether lastgen.txt (the output 
+    // of the previous simulation is present and initializes the simulation
+    // accordingly
+    Continue_Previous_Run_Yes_No(myPars, MyColonies);
 
+    // all the files to which data is written to
 	string datafile1, datafile2, datafile3, datafile4, datafile5, datafile6, dataants;
 
+    // function to give the datafiles particular names
 	NameDataFiles(datafile1, datafile2, datafile3, datafile4, datafile5, datafile6, dataants);
 	    
 	static ofstream out1; 
