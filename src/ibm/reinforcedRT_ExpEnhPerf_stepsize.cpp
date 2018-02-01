@@ -409,46 +409,46 @@ void ShowParams(Params & Par)
 //========================================================================================
 // Function to initialize founders with their own thresholds and Learn and Forget parameters
 void InitFounders(Population &Pop, Params &Par)
-	{
+{
 #ifdef DEBUG  
-        // some bits are taylored for two tasks so we have to throw this assert for now
-        assert(Par.tasks==2);
-        cout <<Par.Col << endl;
+    // some bits are taylored for two tasks so we have to throw this assert for now
+    assert(Par.tasks==2);
+    cout <<Par.Col << endl;
 #endif
-        Pop.resize(Par.Col);
-        //cout << "Initializing founders!" << endl;
-	for (unsigned int i = 0; i < Pop.size(); i++)
-		{
+    Pop.resize(Par.Col);
+    //cout << "Initializing founders!" << endl;
+    for (unsigned int i = 0; i < Pop.size(); i++)
+    {
 
-            // now specify the sizes of the threshold vectors for the 
-            // number of tasks which you define in the parameter file
-		Pop[i].male.threshold.resize(Par.tasks);
-		Pop[i].queen.threshold.resize(Par.tasks);
+        // now specify the sizes of the threshold vectors for the 
+        // number of tasks which you define in the parameter file
+    Pop[i].male.threshold.resize(Par.tasks);
+    Pop[i].queen.threshold.resize(Par.tasks);
 
-        // set the initial thresholds for each individual
-		for(int task=0; task<Par.tasks; task++)
-		    {
-                // option 1: all founders have equal thresholds
-		    Pop[i].male.threshold[task]= Par.meanT[task];
-	            Pop[i].queen.threshold[task]= Par.meanT[task];
-                // option 2: founders have thresholds drawn from normal distribution
-		    //Pop[i].male.threshold[task]= Normal(Par.meanT[task],1);
-			    //Pop[i].queen.threshold[task]= Normal(Par.meanT[task],1);
-		    }
+    // set the initial thresholds for each individual
+    for(int task=0; task<Par.tasks; task++)
+        {
+            // option 1: all founders have equal thresholds
+        Pop[i].male.threshold[task]= Par.meanT[task];
+            Pop[i].queen.threshold[task]= Par.meanT[task];
+            // option 2: founders have thresholds drawn from normal distribution
+        //Pop[i].male.threshold[task]= Normal(Par.meanT[task],1);
+            //Pop[i].queen.threshold[task]= Normal(Par.meanT[task],1);
+        }
 
-        // set the initial learn and forget values for the colony
-        Pop[i].male.learn = Par.initLearn;
-        Pop[i].male.forget = Par.initForget;
-        Pop[i].queen.learn = Par.initLearn;
-        Pop[i].queen.forget = Par.initForget;
+    // set the initial learn and forget values for the colony
+    Pop[i].male.learn = Par.initLearn;
+    Pop[i].male.forget = Par.initForget;
+    Pop[i].queen.learn = Par.initLearn;
+    Pop[i].queen.forget = Par.initForget;
 
-		Pop[i].male.mated =true;
-		Pop[i].queen.mated = true;
-               // cout << Pop[i].male.threshold[0] << "\t" << Pop[i].male.threshold[1] << endl;
-               // cout << Pop[i].queen.threshold[0] << "\t" << Pop[i].queen.threshold[1] << endl;
-                //getch();
-		}
-	}
+    Pop[i].male.mated =true;
+    Pop[i].queen.mated = true;
+           // cout << Pop[i].male.threshold[0] << "\t" << Pop[i].male.threshold[1] << endl;
+           // cout << Pop[i].queen.threshold[0] << "\t" << Pop[i].queen.threshold[1] << endl;
+            //getch();
+    }
+}
 //----------------------------------------------------------------------------------------------------------------------
 //=============================================================================
 //end of InitFounders()
