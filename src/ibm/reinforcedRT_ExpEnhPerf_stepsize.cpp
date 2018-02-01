@@ -25,7 +25,6 @@
 #include <cmath>
 #include <cassert>
 #include <vector>
-#include <omp.h>
 #include <gsl/gsl_rng.h>
 #include <gsl/gsl_randist.h>
 #include <cstring>
@@ -61,6 +60,7 @@ struct Params
     double recomb;
     int timecost;
     double mutstep;
+    double threshold_noise; // noise when comparing thresholds to stimulus levels
     double initStim; // initial stimulus value
     double p_wait; // probability that ant has to wait c time steps before switching
     int tau; // time step from which fitness is counted
@@ -198,28 +198,28 @@ istream & Params::InitParams(istream & in)
     }
 
     // get increase in stimulus intensity for each task
-    for (int i=0; i<tasks; i++) 
+    for (int i = 0; i < tasks; ++i) 
     {    
         in >> tmp; 
         delta.push_back(tmp);
     }
 
     // get maximum efficiency of work for each task
-    for (int i=0; i<tasks; i++)
+    for (int i = 0; i < tasks; ++i)
     {
         in >> tmp; 
         alfa_max.push_back(tmp);
     }
 
     // get minimum efficiency of work for each task
-    for (int i=0; i<tasks; i++)
+    for (int i = 0; i < tasks; ++i)
     {
         in >> tmp; 
         alfa_min.push_back(tmp);
     }
 
     // get stimulus decay for each task
-    for (int i=0; i<tasks; i++) 
+    for (int i = 0; i < tasks; ++i) 
     {
         in >> tmp;
         beta.push_back(tmp);
@@ -240,6 +240,7 @@ istream & Params::InitParams(istream & in)
         initLearn >>
         step_gain_exp >>
         step_lose_exp >>
+        threshold_noise >>
         K >>
         seed;
          
@@ -795,35 +796,63 @@ void DoTask ( Params Par, Colony & anyCol, Ant & anyAnt,int job)
 //end DoTask
 //---------------------------------------------------------------------------------
 
-void WantTask ( Params Par, Colony & anyCol, Ant & anyAnt)
+// let ant evaluate threshold and see if she wants to perform a task
+// several outcomes: ant may prefer one or multiple tasks. In the latter
+// case, one of those tasks is selected as the preferred task
+// she may also want to prefer no task yet
+void WantTask (Params Par, 
+        Colony & anyCol, 
+        Ant & focalAnt)
 {
-    vector<int>counter;
-    counter.reserve(Par.tasks); 
+    // make a list of all the task that this ants wants to do
+    // and reserve space for it
+    vector<int>wanted_task_ids;
+    wanted_task_ids.reserve(Par.tasks); 
 
-    for (int job=0; job<Par.tasks ; job++)
+    // variable to store the focal ant's threshold value + noise for a task
+    double t_noise;
+
+    // loop through all tasks and calculate thresholds
+    for (int job = 0; job < Par.tasks; ++job)
+    {
+        // calculate threshold + random noise
+        t_noise = focalAnt.threshold[job] + gsl_ran_gaussian(rng_r, Par.threshold_noise);
+
+        // threshold cannot be negative
+        if (t_noise < 0)
         {
-        double t_noise =  anyAnt.threshold[job] 
-            + gsl_ran_gaussian(rng_r, 1.0);
-
-        if (t_noise <0) t_noise = 0;
-        //cout << "threshold " << job << " = " << t_noise << " stim = " << anyCol.stim[job] << endl; 
-        if (anyCol.stim[job] >= t_noise && anyCol.stim[job]  > 0) 
-                {
-                counter.push_back(job);  //which tasks are above the threshold
-                } else 
-                    {
-                        anyAnt.want_task[job]=false; // if her threshold not high enough, then quit with wanting task
-                    }
+            t_noise = 0;
         }
 
-    if (counter.size()>1) // if more than one task is above threshold, do random task among those
+        // ants want to work on tasks for which 
+        // - their threshold exceeds the threshold + noise
+        // - the stimulus level is nonzero (i.e., work needs to be done)
+        if (anyCol.stim[job] >= t_noise && anyCol.stim[job] > 0) 
         {
-            int job = gsl_rng_uniform_int(rng_r, counter.size());
-            anyAnt.want_task[counter[job]]=true;
+            // store the wanted task
+            wanted_task_ids.push_back(job);  
+        } 
+        else // ok ant does not want this task
+        {
+            // if ant's threshold not high enough, then quit with wanting task
+            focalAnt.want_task[job] = false;
         }
-    else if(!counter.empty()) anyAnt.want_task[counter[0]]=true;
-            
+    }
 
+    // if more than one task is above threshold, select a random task
+    // that ant wants to perform
+    if (wanted_task_ids.size() > 1)
+    {
+        int job = gsl_rng_uniform_int(rng_r, wanted_task_ids.size());
+        focalAnt.want_task[wanted_task_ids[job]] = true;
+    }
+    else if (!wanted_task_ids.empty())
+    {
+        assert(wanted_task_ids[0] >= 0);
+        assert(wanted_task_ids[0] < Par.tasks);
+
+        focalAnt.want_task[wanted_task_ids[0]] = true;
+    }
 }
 //end WantTask
 //-----------------------------------------------------------------------------
@@ -863,47 +892,61 @@ void TaskChoice(
         Colony & anyCol, // current colony
         Ant & focalAnt) // the ant in question
 { 
-    // assert that there are only two tasks
-    // TODO
-    assert(Par.tasks==2);
+#ifdef DEBUG
 
-     // find out if ant wants a task
+    // little piece of code to assert that ants do not want to do
+    // multiple tasks at the same time
+    bool wants_task = false;
     for (int task_i = 0; task_i < Par.tasks; ++task_i)
     {
         if (focalAnt.want_task[task_i])
         {
-            EvalTaskSwitch(Par, anyCol, focalAnt, job); 
+            if (!wants_task)
+            {
+                wants_task = true;
+            }
+            else
+            {
+                cout << "error: ant wants multiple tasks simultaneously";
+                exit(1);
+            }
+        }
+    }
+#endif
+
+     // find out if ant wants to perform a task
+    for (int task_i = 0; task_i < Par.tasks; ++task_i)
+    {
+        // yes, ant wants to perform task so let's do it
+        if (focalAnt.want_task[task_i])
+        {
+            EvalTaskSwitch(Par, anyCol, focalAnt, task_i); 
             return;
         }
     }
 
-    // ok ant does not want a task yet
+    // ant does not want to perform a task
+
+    // make ant want task
     WantTask(Par, anyCol, focalAnt);
 
-
-        for (int task=0; task<Par.tasks; task++)
-            {
-            if(focalAnt.want_task[task])
-                        {
-                            assert(focalAnt.want_task[1-task]==false);
-                            EvalTaskSwitch(Par, anyCol, focalAnt, task); 
-                        }    
-                
-            }
+     // find out if ant now wants to perform a task
+    for (int task_i = 0; task_i < Par.tasks; ++task_i)
+    {
+        // yes, ant wants to perform task so let's do it
+        if (focalAnt.want_task[task_i])
+        {
+            EvalTaskSwitch(Par, anyCol, focalAnt, task_i); 
+            return;
         }
-
-    else 
-	{   
-    }       
+    }
 } // end of TaskChoice()
 //===============================================================================================
 
+// update all the stimulus values for each colony
 void UpdateAnts(Population & Pop, Params & Par)
 {
-#ifdef DEBUG
-   cout << Pop.size() << endl;
-#endif
-    // go through 
+    // go through all the individual colonies
     for (unsigned int i = 0; i < Pop.size(); ++i)
     {
             for (int task =0; task<Par.tasks; task++)
@@ -934,7 +977,7 @@ void UpdateAnts(Population & Pop, Params & Par)
         //mygetch();
          
         }
-  }  // end of UpdateAnts()
+}  // end of UpdateAnts()
 //------------------------------------------------------------------------------
 
 void Update_Col_Data(
@@ -1547,8 +1590,6 @@ int main(int argc, char* argv[])
         // add these parameters to parameter object
         myPars.InitParams(inp);
 
-        cout << "ok done" << endl;
-        
         // set up the random number generators
         // (from the gnu gsl library)
         gsl_rng_env_setup();
@@ -1626,6 +1667,7 @@ int main(int argc, char* argv[])
         // now go evolve
         for (int g = simstart_generation; g < maxgen; ++g)
         {
+            cout << g << endl;
             Init(MyColonies, myPars);
            
             // number of timesteps that fitness is counted
@@ -1639,77 +1681,75 @@ int main(int argc, char* argv[])
 #endif
 
             // timesteps during colony development
-# pragma omp parallel num_threads(3)
+            for (int k = 0; k < myPars.maxtime; ++k)
             {
-# pragma omp for
-                for (int k = 0; k < myPars.maxtime; ++k)
+                // update all the stimuli of the ants and what they are doing
+                UpdateAnts(MyColonies, myPars);
+
+                // calculate specialization values
+                Calc_F(MyColonies, myPars); 
+
+                // update statistics and if beyond tau, fitness values
+                Update_Col_Data(k, MyColonies, myPars, equil_steps);	
+
+                // calculate at the end of the timestep: the ants have done something
+                // which has consequences for stimulus levels, which you update here
+                UpdateStim(MyColonies, myPars);
+          
+                // in the last timestep
+                if (k == myPars.maxtime-1)
                 {
-                    // update all the stimuli of the ants and what they are doing
-                    UpdateAnts(MyColonies, myPars);
+                    // calculate fitness values
+                    CalcFitness(MyColonies, myPars);
 
-                    // calculate specialization values
-                    Calc_F(MyColonies, myPars); 
-
-                    // update statistics and if beyond tau, fitness values
-                    Update_Col_Data(k, MyColonies, myPars, equil_steps);	
-
-                    // calculate at the end of the timestep: the ants have done something
-                    // which has consequences for stimulus levels, which you update here
-                    UpdateStim(MyColonies, myPars);
-              
-                    // in the last timestep
-                    if (k == myPars.maxtime-1)
+                    // write everything down every 100th timestep
+                    // calculating fitness is only relevant when there are
+                    // multiple colonies
+                    if ((g <= 100 || g % 100 == 0) && myPars.Col>1)
                     {
-                        // calculate fitness values
-                        CalcFitness(MyColonies, myPars);
-
-                        // write everything down every 100th timestep
-                        // calculating fitness is only relevant when there are
-                        // multiple colonies
-                        if ((g <= 100 || g % 100 == 0) && myPars.Col>1)
+                        //cout <<  "Generation " << g << endl;
+                        for (unsigned int col = 0; col < MyColonies.size(); ++col)
                         {
-                            //cout <<  "Generation " << g << endl;
-                            for (unsigned int col = 0; col < MyColonies.size(); ++col)
+                            // take averages over all tasks
+                            for (int task = 0; task < myPars.tasks; ++task)
                             {
-                                // take averages over all tasks
-                                for (int task = 0; task < myPars.tasks; ++task)
-                                {
-                                    MyColonies[col].mean_work_alloc[task]/=equil_steps;
-                                }
-
-                                // write out the data 
-                                Write_Col_Data(out1, myPars, MyColonies, g, col);
-
-                                // write out alleles
-                                Write_Alleles_Spec(out2, 
-                                        out3, 
-                                        myPars, 
-                                        MyColonies, 
-                                        g, 
-                                        col);
-                            } // end of for colonies
-                         } // end if generations are right
-                    } // end if k=maxtime
-
-                //do you want to write out the last generation step by step?
-#ifdef WRITE_LASTGEN_PERSTEP
-                
-                    if (g == simstart_generation+myPars.maxgen-1) 
-                    {
-                        //cout << " writing last generation data " << endl;
-                        WriteData_1Gen(out5, MyColonies, myPars, k);
-            //             WriteAntsThresholds(MyColonies, out6, k, g);
-                        if(k == myPars.maxtime -1)
-                            {	
-                            WriteAntsBeh(MyColonies, out_ants);	
+                                MyColonies[col].mean_work_alloc[task]/=equil_steps;
                             }
-                        //cout << "done with writing last generation data " << endl;
-                    }
+
+                            // write out the data 
+                            Write_Col_Data(out1, myPars, MyColonies, g, col);
+
+                            // write out alleles
+                            Write_Alleles_Spec(out2, 
+                                    out3, 
+                                    myPars, 
+                                    MyColonies, 
+                                    g, 
+                                    col);
+                        } // end of for colonies
+                     } // end if generations are right
+                } // end if k=maxtime
+
+            //do you want to write out the last generation step by step?
+#ifdef WRITE_LASTGEN_PERSTEP
+            
+                if (g == simstart_generation+myPars.maxgen-1) 
+                {
+                    //cout << " writing last generation data " << endl;
+                    WriteData_1Gen(out5, MyColonies, myPars, k);
+        //             WriteAntsThresholds(MyColonies, out6, k, g);
+                    if(k == myPars.maxtime -1)
+                        {	
+                        WriteAntsBeh(MyColonies, out_ants);	
+                        }
+                    //cout << "done with writing last generation data " << endl;
+                }
 #endif
-                } // end of for k time steps
-            }
+            } // end of for k time steps
+    
     // one colony only
-        WriteLastGen(g, myPars, MyColonies);
+    WriteLastGen(g, myPars, MyColonies);
+
     WriteBranchFile(MyColonies, g, myPars, out4, datafile4);
         if(g < myPars.maxgen -1)
             {

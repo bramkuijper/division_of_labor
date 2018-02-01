@@ -204,6 +204,7 @@ pardict = {
         "initLearn" : [0.1], # 
         "step_gain_exp" : [0.2], # 
         "step_lose_exp" : [0.1], # 
+        "threshold_noise" : [1.0], # 
         "K" : [0.1]
 }
 
