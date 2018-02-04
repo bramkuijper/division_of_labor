@@ -1581,104 +1581,105 @@ void WriteAntsThresholds(Population & Pop, ofstream & mydata, int timestep, int 
 //================================================================================
 int main(int argc, char* argv[])
 {
-        // initialize object to store all parameters
-        Params myPars;
+    // initialize object to store all parameters
+    Params myPars;
+    
+    // get parameters from file
+    ifstream inp("params.txt");
+
+    // add these parameters to parameter object
+    myPars.InitParams(inp);
+
+    // set up the random number generators
+    // (from the gnu gsl library)
+    gsl_rng_env_setup();
+    T = gsl_rng_default;
+    rng_r = gsl_rng_alloc(T);
+    gsl_rng_set(rng_r, myPars.seed);
+
+    // initialize the founders of all the colonies
+    Population MyColonies;
+    InitFounders(MyColonies, myPars);
+
+    // this simulation run might a a continuation of a previous 
+    // simulation, for example when that simulation was broken off
+    // prematurely. This function checks whether lastgen.txt (the output 
+    // of the previous simulation is present and initializes the simulation
+    // accordingly
+    Continue_Previous_Run_Yes_No(myPars, MyColonies);
+
+    // all the files to which data is written to
+    string datafile1, 
+           datafile2, 
+           datafile3, 
+           datafile4, 
+           datafile5, 
+           datafile6, 
+           dataants;
+
+    // function to give the datafiles particular names
+    NameDataFiles(
+            datafile1, 
+            datafile2, 
+            datafile3, 
+            datafile4, 
+            datafile5, 
+            datafile6, 
+            dataants);
+
+    // the corresponding output files
+    static ofstream out1; 
+    static ofstream out2;
+    static ofstream out3;
+    static ofstream out4;
+    static ofstream out5;
+    static ofstream out6;
+    static ofstream header1;
+    static ofstream header2;
+    static ofstream out_ants;
+
+    // more than one colony, so..
+    if (myPars.Col > 1) 
+    {
+        out1.open(datafile1.c_str());
+
+        header1.open("header_1.txt");
+
+#ifdef WRITE_LASTGEN_PERSTEP 
+        header2.open("header2.txt");
+#endif
+
+        Header_data(header1, header2);
+    }
         
-        // get parameters from file
-        ifstream inp("params.txt");
-
-        // add these parameters to parameter object
-        myPars.InitParams(inp);
-
-        // set up the random number generators
-        // (from the gnu gsl library)
-        gsl_rng_env_setup();
-        T = gsl_rng_default;
-        rng_r = gsl_rng_alloc(T);
-        gsl_rng_set(rng_r, myPars.seed);
-
-        // initialize the founders of all the colonies
-        Population MyColonies;
-        InitFounders(MyColonies, myPars);
-
-        // this simulation run might a a continuation of a previous 
-        // simulation, for example when that simulation was broken off
-        // prematurely. This function checks whether lastgen.txt (the output 
-        // of the previous simulation is present and initializes the simulation
-        // accordingly
-        Continue_Previous_Run_Yes_No(myPars, MyColonies);
-
-        // all the files to which data is written to
-        string datafile1, 
-               datafile2, 
-               datafile3, 
-               datafile4, 
-               datafile5, 
-               datafile6, 
-               dataants;
-
-        // function to give the datafiles particular names
-        NameDataFiles(
-                datafile1, 
-                datafile2, 
-                datafile3, 
-                datafile4, 
-                datafile5, 
-                datafile6, 
-                dataants);
-
-        // the corresponding output files
-        static ofstream out1; 
-        static ofstream out2;
-        static ofstream out3;
-        static ofstream out4;
-        static ofstream out5;
-        static ofstream out6;
-        static ofstream header1;
-        static ofstream header2;
-        static ofstream out_ants;
-
-        // more than one colony, so..
-        if (myPars.Col > 1) 
-        {
-            out1.open(datafile1.c_str());
-
-            header1.open("header_1.txt");
+    out2.open(datafile2.c_str());
+    out3.open(datafile3.c_str());    
 
 #ifdef WRITE_LASTGEN_PERSTEP 
-            header2.open("header2.txt");
+    out_ants.open(dataants.c_str()); 
+    out5.open(datafile5.c_str());
+    out6.open(datafile6.c_str());
 #endif
 
-            Header_data(header1, header2);
-        }
-            
-        out2.open(datafile2.c_str());
-        out3.open(datafile3.c_str());    
+    // calculate maximum number of generations
+    int maxgen = simstart_generation + myPars.maxgen;
 
-#ifdef WRITE_LASTGEN_PERSTEP 
-        out_ants.open(dataants.c_str()); 
-        out5.open(datafile5.c_str());
-        out6.open(datafile6.c_str());
-#endif
-
-        // calculate maximum number of generations
-        int maxgen = simstart_generation + myPars.maxgen;
-
-        // now go evolve
-        for (int g = simstart_generation; g < maxgen; ++g)
-        {
-            cout << g << endl;
-            Init(MyColonies, myPars);
-           
-            // number of timesteps that fitness is counted
-            // (e.g., when time > tau)
-            double equil_steps=0;
+    // now go evolve
+    for (int g = simstart_generation; g < maxgen; ++g)
+    {
+        cout << g << endl;
+        Init(MyColonies, myPars);
+       
+        // number of timesteps that fitness is counted
+        // (e.g., when time > tau)
+        double equil_steps=0;
 
 #ifdef DEBUG
-            cout << MyColonies.size() <<endl;
-            cout <<myPars.maxtime << endl;
+        cout << MyColonies.size() <<endl;
+        cout <<myPars.maxtime << endl;
 
 #endif
+
 
             // timesteps during colony development
             for (int k = 0; k < myPars.maxtime; ++k)
@@ -1707,7 +1708,7 @@ int main(int argc, char* argv[])
                     // multiple colonies
                     if ((g <= 100 || g % 100 == 0) && myPars.Col>1)
                     {
-                        //cout <<  "Generation " << g << endl;
+                        // go through all colonies and calculate things
                         for (unsigned int col = 0; col < MyColonies.size(); ++col)
                         {
                             // take averages over all tasks
@@ -1732,30 +1733,31 @@ int main(int argc, char* argv[])
 
             //do you want to write out the last generation step by step?
 #ifdef WRITE_LASTGEN_PERSTEP
-            
                 if (g == simstart_generation+myPars.maxgen-1) 
                 {
                     //cout << " writing last generation data " << endl;
                     WriteData_1Gen(out5, MyColonies, myPars, k);
-        //             WriteAntsThresholds(MyColonies, out6, k, g);
+
+                    // WriteAntsThresholds(MyColonies, out6, k, g);
                     if(k == myPars.maxtime -1)
-                        {	
+                    {	
                         WriteAntsBeh(MyColonies, out_ants);	
-                        }
+                    }
                     //cout << "done with writing last generation data " << endl;
                 }
 #endif
             } // end of for k time steps
-    
-    // one colony only
-    WriteLastGen(g, myPars, MyColonies);
 
-    WriteBranchFile(MyColonies, g, myPars, out4, datafile4);
+        // one colony only
+        WriteLastGen(g, myPars, MyColonies);
+
+        WriteBranchFile(MyColonies, g, myPars, out4, datafile4);
+
         if(g < myPars.maxgen -1)
-            {
+        {
             MakeSexuals(MyColonies, myPars);
-
+            
             MakeColonies(MyColonies);
-            }
-        } // end for generations
+        }
+    } // end for generations
 }
