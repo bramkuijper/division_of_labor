@@ -13,6 +13,8 @@
 // TODO: 
 // - multiple tasks
 // - make sure want_task is indeed only one task (see 
+// - see how to deal with eq_steps, which is used to count number of steps
+// since tau
 
 //---------------------------------------------------------------------------
 #include <ctime>
@@ -95,9 +97,9 @@ struct Ant
     int curr_act; // keep track of current act an individual is doing
     int switches; // number transitions to a different task
     int workperiods; // number of working periods 
-    double F; // specialization value
+    double D; // specialization value
     bool mated; // only for queens, keep track of who is already mated
-    double F_franjo; // Franjo's specialization value
+    double Dx; // Franjo's specialization value
     int count_time; //COUNTER OF TIMESTEPS TO SWITCH TASK
     int ID_ant; // individual ID of an ant
 };
@@ -130,10 +132,12 @@ struct Colony
     double rel_fit; // fitness relative to whole population
     double cum_fit; //cumulative fitness
     vector<double>mean_work_alloc;
-    double mean_F;
-    double var_F;
-    double mean_F_franjo;
-    double var_F_franjo;
+
+
+    double mean_D;
+    double var_D;
+    double mean_Dx;
+    double var_Dx;
     int num_offspring;
     double mean_switches;
     double var_switches;
@@ -348,7 +352,7 @@ void ShowAnts(Colony & anyCol)
 	    cout << "count acts " << anyCol.MyAnts[ant].countacts[0] << "\t" << anyCol.MyAnts[ant].countacts[1]  << endl;
         cout << "thresholds " << anyCol.MyAnts[ant].threshold[0] << "\t" << anyCol.MyAnts[ant].threshold[1] << endl;
         cout << "effic " << anyCol.MyAnts[ant].alfa[0] << "\t" << anyCol.MyAnts[ant].alfa[1] << endl;
-	    cout << "F " << anyCol.MyAnts[ant].F << endl; // specialization value
+	    cout << "D " << anyCol.MyAnts[ant].D << endl; // specialization value
 	    cout << "switches " << anyCol.MyAnts[ant].switches << endl;
 	    cout << "workperiods " << anyCol.MyAnts[ant].workperiods << endl;
         cout << "\t" << endl;
@@ -519,15 +523,18 @@ void Inherit(Ant &Daughter, Ant &Mom, Ant &Dad, Params &Par)
 
 //=======================================================================================
 
-// According to formalas in Duarte Thesis
+// update efficiency levels (roughly according to 
+// eq. 4.1 in Duarte 2012 PhD Thesis)
 void UpdateEfficiency(Ant & anyAnt, Params & Par)
 {
-    for (int job = 0; job < Par.tasks; job ++)
-        {
-        double tmp_1 = Par.K * anyAnt.experience_points[job];
-        double tmp_2 = Par.alfa_min[job] * exp(tmp_1);
-        anyAnt.alfa[job] = Par.alfa_max[job] * tmp_2 / (tmp_2 + (1 - Par.alfa_min[job])); 
-        }
+    for (int task_i = 0; task_i < Par.tasks; ++task_i)
+    {
+        double tmp_1 = Par.K * anyAnt.experience_points[task_i];
+        double tmp_2 = Par.alfa_min[task_i] * exp(tmp_1);
+
+        anyAnt.alfa[task_i] = Par.alfa_max[task_i] * tmp_2 / 
+            (tmp_2 + (1 - Par.alfa_min[task_i])); 
+    }
 
 }
 // end UpdateEfficiency
@@ -568,11 +575,15 @@ void InitAnts(Ant & myAnt, Params & Par, Colony & myCol, int numID)
     }
 
     myAnt.last_act = 7; // initiate it at an impossible value for a task, because 0 is a task
-    myAnt.curr_act = 2; // 0 = task 1, 1 = task 2, 2 = idle
+
+    // set current act to a value
+    // beyond the actual tasks, indicating that the worker
+    // is currently idle
+    myAnt.curr_act = Par.tasks; 
     myAnt.switches = 0;
     myAnt.workperiods=0;
-    myAnt.F = 10;
-    myAnt.F_franjo = 10;
+    myAnt.D = 10;
+    myAnt.Dx = 10;
     myAnt.mated = false;
     myAnt.count_time=0;
     UpdateEfficiency(myAnt, Par); 
@@ -611,10 +622,10 @@ void Init(Population & Pop, Params & Par)
         Pop[colony_i].inactive = 0;
 
         // various specialization measurements
-        Pop[colony_i].mean_F = 10; 
-        Pop[colony_i].var_F=0;
-        Pop[colony_i].mean_F_franjo = 10;
-        Pop[colony_i].var_F_franjo = 0;
+        Pop[colony_i].mean_D = 10; 
+        Pop[colony_i].var_D=0;
+        Pop[colony_i].mean_Dx = 10;
+        Pop[colony_i].var_Dx = 0;
         Pop[colony_i].mean_switches = 0;
         Pop[colony_i].var_switches = 0;
         Pop[colony_i].mean_workperiods=0;
@@ -681,105 +692,129 @@ void Init(Population & Pop, Params & Par)
     } // end of for Pop
 } // end of Init()
 //==================================================================================================================
-//
+
+// given that one ant has started working update the colony stimulus
+// levels
 void UpdateStimPerAnt(Params & Par, Colony & anyCol, Ant & anyAnt, int task)
 {
-
-    //cout << "Updating the stimulus per ant" << endl;
 #ifdef DEBUG
-   
-cout << Par.N << endl;
-cout << anyCol.workfor[task] << endl;
-cout <<anyCol.numacts_step[task]<< endl;
-cout << anyCol.stim[task] << endl;
+    cout << Par.N << endl;
+    cout << anyCol.workfor[task] << endl;
+    cout <<anyCol.numacts_step[task]<< endl;
+    cout << anyCol.stim[task] << endl;
 #endif
-		anyCol.workfor[task]+=anyAnt.alfa[task];   //update workdone for fitness 
-		anyCol.stim[task]-=(anyAnt.alfa[task]/Par.N); //update stimulus     
     
-    if(anyCol.stim[task]<0)
-        anyCol.stim[task]=0;
+    // increment total amount of work being done in the colony
+    // by adding an alpha_i * 1 (here 1 is the new worker who works on
+    // task 'task'.
+    anyCol.workfor[task] += anyAnt.alfa[task];    
+
+    // update the stimulus accordingly (e.g., see eq. (3) in 
+    // Bonabeau et al 1996
+    anyCol.stim[task] -= (anyAnt.alfa[task]/Par.N); 
+       
+    // set boundary of the stimulus at 0
+    if(anyCol.stim[task] < 0)
+    {
+        anyCol.stim[task] = 0;
+    }
 }
 
 //====================================================================================================================
 void UpdateThresholds_And_Experience (Ant & anyAnt, Params & Par)
+{
+    // update thresholds of all tasks
+    for (int task_i = 0; task_i < Par.tasks; ++task_i)
     {
-        switch(anyAnt.curr_act)
-            {
-                case 0: anyAnt.threshold[0] -= anyAnt.learn ; 
-                        anyAnt.threshold[1] += anyAnt.forget;
-                        anyAnt.experience_points[0]+=Par.step_gain_exp;
-                        anyAnt.experience_points[1]-=Par.step_lose_exp;
-                       break;
+        // decrease thresholds and increase experience points
+        // when this is the task the ant is currently working on
+        if (anyAnt.curr_act == task_i)
+        {
+            anyAnt.treshold[task_i] -= anyAnt.learn;
+            anyAnt.experience_points[task_i] += Par.step_gain_exp;
+        }
+        else
+        {
+            // for all other tasks (which the ant is not currently 
+            // doing), increase thresholds and decrease experience points
+            anyAnt.treshold[task_i] += anyAnt.forget;
+            anyAnt.experience_points[task_i] -= Par.step_lose_exp;
 
-                case 1: anyAnt.threshold[1] -= anyAnt.learn; 
-                        anyAnt.threshold[0] += anyAnt.forget;
-                        anyAnt.experience_points[0]-= Par.step_lose_exp;
-                        anyAnt.experience_points[1]+=Par.step_gain_exp;
-                        break;
+        }
 
-                case 2: anyAnt.threshold[0] += anyAnt.forget;
-                        anyAnt.threshold[1] += anyAnt.forget;
-                         anyAnt.experience_points[0]-=Par.step_lose_exp;
-                         anyAnt.experience_points[1]-=Par.step_lose_exp;
-                        break;
+        // note that if ant is inactive she will increase her thresholds
+        // and decrease experience points for all tasks
 
-                default: cout << "ERROR -- ANT NOT ASSIGNED TASK NOR IDLE" << endl;
-            }
-        for (int task = 0; task < Par.tasks; task ++)
-            {
-            if(anyAnt.threshold[task]<0) anyAnt.threshold[task] =0;
-            if(anyAnt.experience_points[task] < 0) anyAnt.experience_points[task] = 0;
-            }
-    }   
+        
+        // prevent thresholds and experience points from taking negative values
+        if (anyAnt.threshold[task_i] < 0)
+        {
+            anyAnt.threshold[task_i] = 0;
+        }
+
+        if (anyAnt.experience_points[task_i] < 0)
+        {
+            anyAnt.experience_points[task_i] = 0;
+        }
+    }
+
+}   
 //========================================================================================================================
 void UpdateSwitches(Ant & anyAnt, Params & Par)
 {
-
-    if(anyAnt.curr_act != 2) // if ant active
-        {
-            if(anyAnt.last_act != 7 && anyAnt.last_act != anyAnt.curr_act)
-                anyAnt.switches +=1;
-
-        } 
+    // record task switch when
+    // 1. ant is currently active
+    // 2. last act wasn't inactivity
+    // 3. last act was different from current act
+    if (anyAnt.curr_act < Par.tasks && 
+            anyAnt.last_act != 7 && 
+            anyAnt.last_act != anyAnt.curr_act)
+    {
+        ++anyAnt.switches;
+    }
 }
 //end UpdateSwitches
 //=========================================================================================================================
+
+// calculate whether ant is quitting a task
 void QuitTask(Colony & anyCol, Ant & anyAnt, int job, Params & Par)
-    {
+{
 #ifdef DEBUG
-        cout << "Quitting tasks" << endl;
-        cout << "chance to quit: " << Par.p << endl;
+    cout << "Quitting tasks" << endl;
+    cout << "chance to quit: " << Par.p << endl;
 
 #endif
-        double q = gsl_rng_uniform(rng_r);
 
-#ifdef SIMULTANEOUS_UPDATE
+    // draw random number to compare with quitting probability
+    double q = gsl_rng_uniform(rng_r);
 
-        if (q <= Par.p)
-         {
-         //anyAnt.act[job] = false;
-         //anyAnt.act[2] = true; // she quits task and becomes idle
-         anyAnt.want_task[anyAnt.curr_act]=false;
-         anyAnt.count_time=0; // reset time to zero, she may choose the same or another task next
-         anyAnt.curr_act = 2;
-         //cout << "ant quits" << endl;
-         }
-#endif  
+    // evaluate chance to quit
+    if (q <= Par.p)
+    {
+        // OK ant quits
+        //
+        // ant does not want to do any task
+        anyAnt.want_task[anyAnt.curr_act] = false;
 
-#ifndef SIMULTANEOUS_UPDATE  
-        if (q <= Par.p)
-         {
-         //anyAnt.act[job] = false;
-         //anyAnt.act[2] = true; // she quits task and becomes idle
-         anyAnt.want_task[anyAnt.curr_act]=false;
-         anyAnt.count_time=0; // reset time to zero, she may choose the same or another task next
-         anyAnt.curr_act = 2;
-         //cout << "ant quits" << endl;
-         }
-        else UpdateStimPerAnt(Par, anyCol, anyAnt, job);
-#endif
-
+        // set time worked to zero, 
+        // she may choose the same or another task next
+        anyAnt.count_time = 0;
+        
+        // set her current task to something beyond the current task options
+        anyAnt.curr_act = Par.tasks;
     }
+    else
+    {
+        // only when stimulus levels are immediately updated
+        // when ant starts to work
+#ifndef SIMULTANEOUS_UPDATE  
+
+        // update stimulus levels now that new ant has joined workforce
+        UpdateStimPerAnt(Par, anyCol, anyAnt, job);
+#endif
+    }
+
+}
 
 //------------------------------------------------------------------------------
 void DoTask ( Params Par, Colony & anyCol, Ant & anyAnt,int job)
@@ -894,7 +929,7 @@ void TaskChoice(
 { 
 #ifdef DEBUG
 
-    // little piece of code to assert that ants do not want to do
+    // debugging only: assert that ants do not want to do
     // multiple tasks at the same time
     bool wants_task = false;
     for (int task_i = 0; task_i < Par.tasks; ++task_i)
@@ -943,213 +978,243 @@ void TaskChoice(
 } // end of TaskChoice()
 //===============================================================================================
 
-// update all the stimulus values for each colony
-void UpdateAnts(Population & Pop, Params & Par)
+// if ant is working, see whether it might quit
+// if ant is not working, see whether it might start a task
+void UpdateAnts(Colony & col, Params & Par)
 {
-    // go through all the individual colonies
-    for (unsigned int i = 0; i < Pop.size(); ++i)
+    // go through all tasks and reset their stats to 0
+    for (int task =0; task < Par.tasks; ++task)
     {
-            for (int task =0; task<Par.tasks; task++)
-             {
-             Pop[i].workfor[task]=0; // reset work for tasks
-             Pop[i].numacts_step[task] = 0;
-             }
-         random_shuffle(Pop[i].MyAnts.begin(), Pop[i].MyAnts.end());
-         
-         for (unsigned int j = 0; j<Pop[i].MyAnts.size(); j++)  //actives may quit, idle may work
-            {
-            //cout << j << " of "<< Pop[i].MyAnts.size() << " workers " << endl;
-            if(Pop[i].MyAnts[j].curr_act!=2)//if ant active 
-                {
-                //cout << "Ant busy " << endl;
-                Pop[i].MyAnts[j].last_act = Pop[i].MyAnts[j].curr_act; //record last act
-                QuitTask(Pop[i], Pop[i].MyAnts[j], Pop[i].MyAnts[j].curr_act, Par); // wanna quit?
-                }
-            if(Pop[i].MyAnts[j].curr_act==2) TaskChoice(Par, Pop[i], Pop[i].MyAnts[j]); //if inactive, choose a task 
-            
-            //update number of switches after choosing tasks
-            UpdateSwitches(Pop[i].MyAnts[j], Par);
-            UpdateThresholds_And_Experience(Pop[i].MyAnts[j], Par);
-            UpdateEfficiency(Pop[i].MyAnts[j], Par);
-            } 
-          
-        //ShowAnts(Pop[i]);
-        //mygetch();
-         
+         Col.workfor[task] = 0; 
+         Col.numacts_step[task] = 0;
+    }
+
+    // randomize order of ants 
+    random_shuffle(Col.MyAnts.begin(), Col.MyAnts.end());
+        
+    // go through all ants and evaluate what they are doing/going to do
+    for (unsigned int ant_i = 0; ant_i < Col.MyAnts.size(); ++ant_i)  
+    {
+        // check if ant is doing one of the tasks
+        if (Col.MyAnts[ant_i].curr_act < Par.tasks) 
+        {
+            // yes, ant is busy, hence record last act
+            Col.MyAnts[ant_i].last_act = Col.MyAnts[ant_i].curr_act; 
+
+            // evaluate whether ant will quit task
+            QuitTask(Col, Col.MyAnts[ant_i], Col.MyAnts[ant_i].curr_act, Par); 
         }
+
+        // ant currently inactive, let it choose a task
+        // (note that this can include an ant
+        // who quit in the previous statement)
+        if (Col.MyAnts[ant_i].curr_act >= Par.tasks)
+        {
+            TaskChoice(Par, Col, Col.MyAnts[ant_i]);
+        }
+            
+        //update number of switches after choosing tasks
+        UpdateSwitches(Col.MyAnts[ant_i], Par);
+
+        // update the thresholds and experience levels
+        UpdateThresholds_And_Experience(Col.MyAnts[ant_i], Par);
+
+        // update the ant's efficiency
+        UpdateEfficiency(Col.MyAnts[ant_i], Par);
+
+    } // end for Col.MyAnts.
+          
 }  // end of UpdateAnts()
 //------------------------------------------------------------------------------
 
 void Update_Col_Data(
         int step,  // current timestep
-        Population & Pop, // the metapopulation
-        Params & Par, // the parameters
-        double & eq_steps // 
+        Colony & Col, // the metapopulation
+        Params & Par // the parameters
         )
 {
-    // go through all colonies and update act counters
-    for (unsigned int col = 0; col < Pop.size(); ++col) 
-    {
-        Pop[col].inactive = 0;
+    Col.inactive = 0;
 
-        for (unsigned int ind = 0; ind < Pop[col].MyAnts.size(); ind ++)
+    for (unsigned int ant_i = 0; ant_i < Col.MyAnts.size(); ++ant_i)
+    {
+        // check whether ant is active
+        if (Col.MyAnts[ant_i].curr_act < Par.tasks)
         {
-            // check whether ant is active
-            if (Pop[col].MyAnts[ind].curr_act < Par.tasks)
-            {
-                // if active update act count
-                Pop[col].numacts_step[Pop[col].MyAnts[ind].curr_act] += 1; 
-            }
-            else // ant inactive, count it
-            {
-                ++Pop[col].inactive;
-            }
-            
-            Pop[col].inactive /= Pop[col].MyAnts.size(); // proportion inactive workers 
+            // if active update act count
+            Col.numacts_step[Col.MyAnts[ant_i].curr_act] += 1; 
+        }
+        else // ant inactive, count it
+        {
+            ++Col.inactive;
         }
         
-        Pop[col].numacts_total[0] += Pop[col].numacts_step[0]; 
-        Pop[col].numacts_total[1] += Pop[col].numacts_step[1]; 
+        Col.inactive /= Col.MyAnts.size(); // proportion inactive workers 
     }
-
-    // calculate fitness if within tau timesteps from the end
-	if (step >= Par.tau) 
+    
+    // update counts of the total acts performed in the colony
+    for (int task_i = 0; task_i < Par.tasks; ++task_i)
     {
-        // update the number of timesteps that fitness is counted
-        ++eq_steps;
-
-        for (unsigned int col = 0; col < Pop.size(); ++col)
+        Col.numacts_total[task_i] += Col.numacts_step[task_i]; 
+    
+        // calculate fitness if within tau timesteps from the end
+        if (step >= Par.tau) 
         {
-            for (int task=0; task<Par.tasks; task++) 
-            {
-                // add the number of workers to the fitness tally
-                Pop[col].fitness_work[task] += Pop[col].workfor[task];
-                Pop[col].mean_work_alloc[task]+=Pop[col].numacts_step[task];
-            }
-        }	
+            // add the number of workers to the fitness tally
+            Col.fitness_work[task_i] += Col.workfor[task_i];
+            Col.mean_work_alloc[task_i] += Col.numacts_step[task_i];
+        }
     }
-		
+
 } // end of UpdateColony_data
 //===================================================================================================
-void UpdateStim(Population & Pop, Params & Par)   // stimulus changes const increase
+void UpdateStim(Colony &Col, Params & Par)   // stimulus changes const increase
 {
-    //cout << "updating stimulus" << endl;
-    for (unsigned int i = 0; i<Pop.size(); i++)
+    for (int task=0; task<Par.tasks; task++)
     {
 #ifdef SIMULTANEOUS_UPDATE
-        for (int task=0; task<Par.tasks; task++)
-        {
-            // update the stimulus for this task
-            Pop[i].newstim[task] = Pop[i].stim[task] + Par.delta[task] - 
-                (Par.beta[task]*Pop[i].stim[task]) - (Pop[i].workfor[task]/Par.N);
-
-            Pop[i].stim[task] = Pop[i].newstim[task];
-
-            if (Pop[i].stim[task] < 0)
-            {
-                Pop[i].stim[task] =0;
-            }
-        }
+        // update the stimulus for this task
+        Col.newstim[task] = Col.stim[task] + Par.delta[task] - 
+            (Par.beta[task]*Col.stim[task]) - (Col.workfor[task]/Par.N);
 #endif
-
 #ifndef SIMULTANEOUS_UPDATE
-        for (int task=0; task<Par.tasks; task++)
-        {
-            Pop[i].newstim[task] = Pop[i].stim[task] + 
-                Par.delta[task] - (Par.beta[task]*Pop[i].stim[task]); 
-
-            Pop[i].stim[task] = Pop[i].newstim[task];
-
-            if (Pop[i].stim[task] < 0)
-            {
-                Pop[i].stim[task] =0;
-            }
-        }
+        Col.newstim[task] = Col.stim[task] + 
+            Par.delta[task] - (Par.beta[task]*Col.stim[task]); 
 #endif
 
+        Col.stim[task] = Col.newstim[task];
+
+        if (Col.stim[task] < 0)
+        {
+            Col.stim[task] =0;
+        }
     }
 } // end UpdateStim()
 //==============================================================================================
 
 // calculate specialization value
-void Calc_F(Population & Pop, Params & Par)
+void Calc_D(Colony & col, Params & Par)
 {
-    double C;
+    Col.mean_D=0;
+    Col.mean_Dx=0; 
+
+    Col.mean_switches=0; 
+    Col.mean_workperiods=0; 
+
+    // calculate D = qbar / sum(p_i^2, i= 0, 1, 2, ... n_tasks) - 1
+    // see eq. (5) in Duarte et al 2012 Behav Ecol Sociobiol
+    // 66: 947-957, https://doi.org/10.1007/s00265-012-1343-2 
+    
+    // we need to calculate the proportion of acts for task i
+    // as these are the p_i values in eq (5) of Duarte et al.
+    double prop_work[Par.tasks];
+
+    // with these p_i values we can then calculate the total
+    // denominator of D
+    double D_denominator = 0;
+
+    // for this we need to ge the total amount of work
+    double total_work = 0;
+
+    // sum total work
+    for (int task_i = 0; task_i < Par.tasks; ++task_i)
+    {
+        total_work += Col.numacts_total[task_i];
+    }
+
+    // then it is easy to calculate proportions
+    for (int task_i = 0; task_i < Par.tasks; ++task_i)
+    {
+        prop_work[task_i] = Col.numacts_total[task_i] / total_work;
+
+        // and calculate the total denominator
+        D_denominator += prop_work[task_i] * prop_work[task_i];
+    }
+
+    double sumD=0; 
+    double sumsquares_D=0;
+
+    double sumDx =0; 
+    double sumsquares_Dx =0;
+
+    // we also want to calculate variances, which are given by 
+    // Var[x] = E[x^2] - E[x]^2
+    double sumsquares_switches=0; 
+    double sumsquares_workperiods=0;
+
+    double activ=0;
+    
+    // calculate the probability that an individual ant
+    // switches between one timestep and the next
+    double switch_prob;
    
-    for (unsigned int i = 0; i<Pop.size(); i++)
+
+    // go through all ants and calculate specialization stats
+    for (unsigned int ant_i = 0; ant_i < Col.MyAnts.size(); ++ant_i)
+    {
+        assert(Col.MyAnts[ant_i].workperiods <= Par.maxtime);
+
+        // set switching prob to 0
+        switch_prob = 0;
+
+        if (Col.MyAnts[ant_i].workperiods > 1)
         {
-        Pop[i].mean_F=-10;
-        Pop[i].mean_F_franjo=-10; 
-        Pop[i].mean_switches=0; 
-        Pop[i].mean_workperiods=0; 
+            Col.mean_switches += Col.MyAnts[ant_i].switches;
+            Col.mean_workperiods += Col.MyAnts[ant_i].workperiods;
 
-        double p1 = (double)Pop[i].numacts_total[0] / (Pop[i].numacts_total[0] + Pop[i].numacts_total[1]);
-        
-        double p2 = (double)Pop[i].numacts_total[1] / (Pop[i].numacts_total[0] + Pop[i].numacts_total[1]);
-        
-        double denomin = p1*p1 + p2*p2;
+            // calculate sum of squares for workperiods
+            sumsquares_workperiods += 
+                Col.MyAnts[ant_i].workperiods * Col.MyAnts[ant_i].workperiods;
 
-        double sumF=0; double sumsquares_F=0;
+            sumsquares_switches += 
+                Col.MyAnts[ant_i].switches * Col.MyAnts[ant_i].switches;
 
-        double sumF_franjo=0; double sumsquares_F_franjo=0;
+            // switching prob between one timestep and the next
+            // is total number of switches divided by total possible
+            // moments to switch (which is total number of workperiods - 1)
+            // -1 as you cannot switch anymore during the last work period
+            switch_prob = double(Pop[i].MyAnts[ant_i].switches) / 
+                (Col.MyAnts[ant_i].workperiods - 1.0);
 
-        double sumsquares_switches=0; double sumsquares_workperiods=0;
+            // D = qbar (see eq (5) in Duarte et al) is then given by
+            // qbar = 1.0 - switch_prob
 
-        double activ=0;
+            // however, when we want to scale between -1 and 1,
+            // we do:
+            Col.MyAnts[ant_i].D = 1.0 - 2.0 * switch_prob;
 
-        for (unsigned int j = 0; j<Pop[i].MyAnts.size(); j++)
-            {
-            assert(Pop[i].MyAnts[j].workperiods <= Par.maxtime);
-            C = 0;
-            if (Pop[i].MyAnts[j].workperiods > 1)
-              {
-              Pop[i].mean_switches += Pop[i].MyAnts[j].switches;
-              Pop[i].mean_workperiods += Pop[i].MyAnts[j].workperiods;
-              
-              C = double(Pop[i].MyAnts[j].switches) / (Pop[i].MyAnts[j].workperiods - 1);
-              
-              Pop[i].MyAnts[j].F = 1 - 2*C;
+            sumsquares_D += Col.MyAnts[ant_i].D * Col.MyAnts[ant_i].D;
 
-// correction for proportion of tasks
-              Pop[i].MyAnts[j].F_franjo = (1-C) / denomin;
-              
-              sumF += Pop[i].MyAnts[j].F;
-              activ +=1;
-              sumF_franjo +=Pop[i].MyAnts[j].F_franjo;
-              }
-            }
+            // or in case we want to correct for the fact that ants may
+            // remain at the same task due to randomness, we have to divide
+            // by D_denom. We have to substract 1.0 to scale between
+            // -1 and 1
+            Col.MyAnts[ant_i].Dx = (1.0 - switch_prob) / D_denom - 1.0;
+            
+            sumsquares_Dx += Col.MyAnts[ant_i].Dx * Col.MyAnts[ant_i].Dx;
 
+            sumD += Col.MyAnts[ant_i].D;
+            activ += 1.0;
+            sumDx += Col.MyAnts[ant_i].Dx;
+        }
+    }
 
-        Pop[i].mean_switches /= activ;
+    Col.mean_switches /= activ;
 
-        Pop[i].mean_workperiods = Pop[i].mean_workperiods/Pop[i].MyAnts.size();
-        //cout << "mean of switches " << Pop[i].mean_switches << endl;
-        Pop[i].mean_F = sumF/activ;
-        Pop[i].mean_F_franjo = sumF_franjo/activ;
+    Col.mean_workperiods = Col.mean_workperiods/Col.MyAnts.size();
+    
+    Col.mean_D = sumD/activ;
+    Col.mean_Dx = sumDx/activ;
 
-        for (unsigned int j = 0; j<Pop[i].MyAnts.size(); j++)
-            {
-                sumsquares_workperiods += (Pop[i].MyAnts[j].workperiods - Pop[i].mean_workperiods)*(Pop[i].MyAnts[j].workperiods - Pop[i].mean_workperiods);
+    Col.var_switches = sumsquares_switches / activ 
+        - Col.mean_switches * Col.mean_switches;
 
-                if (Pop[i].MyAnts[j].workperiods > 1)
-                    {
-                    sumsquares_switches += ( Pop[i].MyAnts[j].switches - Pop[i].mean_switches)*( Pop[i].MyAnts[j].switches - Pop[i].mean_switches);
+    Col.var_workperiods = sumsquares_workperiods / activ 
+        - Col.mean_workperiods * Col.mean_workperiods;
 
-                    sumsquares_F += (Pop[i].MyAnts[j].F - Pop[i].mean_F)* (Pop[i].MyAnts[j].F - Pop[i].mean_F);
+    Col.var_D = sumsquares_D / activ - Col.mean_D * Col.mean_D;
+    Col.var_Dx = sumsquares_Dx / activ - Col.mean_Dx * Col.mean_Dx;
 
-                    sumsquares_F_franjo += (Pop[i].MyAnts[j].F_franjo - Pop[i].mean_F_franjo)* (Pop[i].MyAnts[j].F_franjo - Pop[i].mean_F_franjo);
-                    }
-            }
-
-        Pop[i].var_switches = sumsquares_switches / activ;
-        Pop[i].var_workperiods = sumsquares_workperiods / Pop[i].MyAnts.size();
-        Pop[i].var_F = sumsquares_F / activ;
-        Pop[i].var_F_franjo = sumsquares_F_franjo / activ;
-
-        //cout << "mean of switches " << Pop[i].mean_switches << endl;
-        } // end for Colonies
-
-  } // end of Calc_F()
+} // end of Calc_D()
 //=======================================================================================================================
 
 // determine fitness
@@ -1375,7 +1440,7 @@ bool Check_Spec(Population & Pop)
 	int count_cols=0; // count colonies with less than 0.75 average specialization 
 	for (unsigned int col=0; col<Pop.size(); col++)
 		{
-	        	if(Pop[col].mean_F<0.75) 
+	        	if(Pop[col].mean_D<0.75) 
 				count_cols +=1;	
 
 		}
@@ -1430,10 +1495,10 @@ void Write_Alleles_Spec(
     data_reinforcement << Pop[colony].queen.forget << endl; 
 
 	data_f << gen <<";" 
-                << Pop[colony].mean_F_franjo << ";" 
+                << Pop[colony].mean_Dx << ";" 
                 << Pop[colony].mean_switches << ";" 
                 << Pop[colony].mean_workperiods << ";"
-                << Pop[colony].var_F_franjo << ";"
+                << Pop[colony].var_Dx << ";"
                 << Pop[colony].var_switches <<";" 
                 << Pop[colony].var_workperiods << endl;
 } 
@@ -1500,7 +1565,7 @@ void Header_data(ofstream & header, ofstream & header2)
 		<< "Workers1" << ";"
 		<< "Workers2" << ";" 
 		<< "Fitness" << ";" 
-		<< "Mean_F_franjo" << endl;
+		<< "Mean_Dx" << endl;
 #endif   
 }
 //=======================================================================================================================
@@ -1532,7 +1597,7 @@ void WriteData_1Gen(ofstream & mydata,
 
         // write down colony fitness and specialization values
         mydata << Pop[col].fitness << ";" 
-            << Pop[col].mean_F_franjo << endl; 
+            << Pop[col].mean_Dx << endl; 
     }
 }
 //==========================================================================================================================
@@ -1679,23 +1744,28 @@ int main(int argc, char* argv[])
         cout <<myPars.maxtime << endl;
 
 #endif
-
-
+        // now go through all colonies and let them do work
+        // for myPars.maxtime timesteps
+        for (int col_i = 0; col_i < Pop.size; ++col_i)
+        {
             // timesteps during colony development
             for (int k = 0; k < myPars.maxtime; ++k)
             {
-                // update all the stimuli of the ants and what they are doing
-                UpdateAnts(MyColonies, myPars);
+                // update all the stimuli of the ants 
+                // and what they are doing
+                UpdateAnts(MyColonies[col_i], myPars);
 
                 // calculate specialization values
-                Calc_F(MyColonies, myPars); 
+                Calc_D(MyColonies[col_i], myPars); 
 
                 // update statistics and if beyond tau, fitness values
-                Update_Col_Data(k, MyColonies, myPars, equil_steps);	
+                Update_Col_Data(k, MyColonies[col_i], myPars);	
 
-                // calculate at the end of the timestep: the ants have done something
-                // which has consequences for stimulus levels, which you update here
-                UpdateStim(MyColonies, myPars);
+                // calculate at the end of the timestep: 
+                // the ants have done something
+                // which has consequences for stimulus levels, 
+                // which you update here
+                UpdateStim(MyColonies[col_i], myPars);
           
                 // in the last timestep
                 if (k == myPars.maxtime-1)
