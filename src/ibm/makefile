@@ -5,9 +5,9 @@ clean :
 	rm xreinforcedRT
 
 cleanout:
-	rm data_work_alloc*.txt
-	rm f_dist*.txt
-	rm header*.txt
-	rm lastgen*.txt
-	rm allele_distrib*
-	rm branch.txt
+	rm -f data_work_alloc*.txt
+	rm -f f_dist*.txt
+	rm -f header*.txt
+	rm -f lastgen*.txt
+	rm -f allele_distrib*
+	rm -f branch.txt

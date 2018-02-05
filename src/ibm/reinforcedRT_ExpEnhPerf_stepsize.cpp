@@ -12,9 +12,7 @@
 //
 // TODO: 
 // - multiple tasks
-// - make sure want_task is indeed only one task (see 
-// - see how to deal with eq_steps, which is used to count number of steps
-// since tau
+// - make sure want_task is indeed only one task 
 
 //---------------------------------------------------------------------------
 #include <ctime>
@@ -127,7 +125,6 @@ struct Colony
 
     vector <double>fitness_work; //number of acts * eff performed in the time steps counting for fitness 
     double fitness;
-    double diff_fit;// fitness difference to minimal fitness
     double rel_fit; // fitness relative to whole population
     double cum_fit; //cumulative fitness
     vector<double>mean_work_alloc;
@@ -329,17 +326,29 @@ void Read_LastGen_Data(istream & in, Params & Par, Population & Pop)
 	   >> simstart_generation; 
 
 	for (unsigned int i = 0; i < Pop.size(); i++)
-		{
-			in >> Pop[i].male.learn
-                >> Pop[i].male.forget
-                >> Pop[i].queen.learn
-                >> Pop[i].queen.forget;
-		}
+    {
+        in >> Pop[i].male.learn
+            >> Pop[i].male.forget
+            >> Pop[i].queen.learn
+            >> Pop[i].queen.forget;
+    }
+}
+
+void Show_Colonies(Population &Pop)
+{
+    for (unsigned int col = 0; 
+            col < Pop.size(); ++col)
+	{
+        cout << "colony: " << col
+            << " fitness: " << Pop[col].fitness
+            << " rel fitness: " << Pop[col].rel_fit
+            << " cum fitness: " << Pop[col].cum_fit << endl;
+    }
 }
 
 //============================================================================================
 
-void ShowAnts(Colony & anyCol)
+void Show_Ants(Colony & anyCol)
 {
     cout << "=======================================" << endl;
     cout << "Current values of:" << endl; 
@@ -359,7 +368,7 @@ void ShowAnts(Colony & anyCol)
 }
 
 //--------------------------------------------------------------------------------
-void ShowParams(Params & Par)
+void Show_Params(Params & Par)
 {
     cout << "Workers " << Par.N << endl;
     cout << "Colonies " << Par.Col << endl;
@@ -459,56 +468,47 @@ void Mutation(double & trait, double & parent, Params &Par)
 //end of Mutation()
 void Inherit(Ant &Daughter, Ant &Mom, Ant &Dad, Params &Par)
 {
-    // recombination rate is sampled from a uniform distribution?
-    // TODO
     double rec = gsl_rng_uniform(rng_r);
 
-    if (Par.recomb > rec)
+    // ok, full recombination 
+    if (rec < Par.recomb)
+    {
+        // with probabability 0.5, mom transmits learn
+        // dad transmits forget
+        if (gsl_rng_uniform(rng_r) < 0.5)
         {
-
-            // which of the parents whill inherit the first trait
-        int who = gsl_rng_uniform_int(rng_r, 2);
-
-           //each task will be inherited from different parents
-        if (who ==0)
-                {
-                    Mutation(Daughter.learn, Mom.learn, Par);
-                    Mutation(Daughter.forget, Dad.forget, Par); 
-                }
-        else 
-                {
-                    Mutation(Daughter.learn, Dad.learn, Par);
-                    Mutation(Daughter.forget, Mom.forget, Par);
-                }
-    
-        } 
-                //assert(Daughter.threshold[task]>0);
-    else 
-        {
-       //both tasks will be inherited from the same parent 
-        int who = gsl_rng_uniform_int(rng_r, 2);
-        
-                //cout << "For task " << task << endl;
-                //cout << anynumber << endl;
-                  //  cout << "inherited from " << who << endl;
-            if (who ==0)
-                {
-                    Mutation(Daughter.learn, Mom.learn, Par);
-                    Mutation(Daughter.forget, Mom.forget, Par);
-                }
-
-            else if (who==1)
-                {
-                    Mutation(Daughter.learn, Dad.learn, Par);
-                    Mutation(Daughter.forget, Dad.forget, Par);
-                }
-
-//            Daughter.learn = gsl_rng_uniform(rng_r) < 0.5 ? Mutate(Dad.Learn) : Mutate(Mother.Learn)
-//            Daughter.forget = gsl_rng_uniform(rng_r) < 0.5 ? Mutate(Dad.Forget) : Mutate(Mother.Forget)
+            Mutation(Daughter.learn, Mom.learn, Par);
+            Mutation(Daughter.forget, Dad.forget, Par); 
         }
+        else // with prob 0.5 vice versa
+        {
+            Mutation(Daughter.learn, Dad.learn, Par);
+            Mutation(Daughter.forget, Mom.forget, Par);
+        }
+    } 
+    else  // no recombination
+    {
+        if (gsl_rng_uniform(rng_r) < 0.5)
+        {
+            Mutation(Daughter.learn, Mom.learn, Par);
+            Mutation(Daughter.forget, Mom.forget, Par);
+        }
+        else 
+        {
+            Mutation(Daughter.learn, Dad.learn, Par);
+            Mutation(Daughter.forget, Dad.forget, Par);
+        }
+    }
 
-        if (Daughter.learn < 0) Daughter.learn = 0;
-        if (Daughter.forget < 0) Daughter.forget =0;
+    if (Daughter.learn < 0)
+    {
+        Daughter.learn = 0;
+    }
+
+    if (Daughter.forget < 0) 
+    {
+        Daughter.forget = 0;
+    }
 
 } // end of Inherit
 
@@ -599,7 +599,6 @@ void Init(Colony & Col,
     Col.fitness = 0;
     Col.rel_fit = 0;
     Col.cum_fit = 0;
-    Col.diff_fit = 0;
 
     // set counter of idle workers to 0
     Col.idle = 0;
@@ -1201,9 +1200,10 @@ void Calc_D(Colony & Col, Params & Par)
 // determine fitness
 void Calc_Abs_Fitness(Colony & Col, Params & Par)
 {
-    Col.fitness = 0;
+    Col.fitness = Col.fitness_work[0];
+    Col.mean_work_alloc[0] /= Par.maxtime - Par.tau;
 
-    for (unsigned int task_i = 0; task_i < Par.tasks; ++task_i)
+    for (unsigned int task_i = 1; task_i < Par.tasks; ++task_i)
     {
         // multiplicative fitness
         Col.fitness *= Col.fitness_work[task_i];
@@ -1242,27 +1242,6 @@ void Calc_Rel_Fitness(Population &Pop, Params &Par)
 //-------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------
 
-// draw a parent colony to produce a sexual individual
-// according to its fitness value
-int Draw_Parent(Population & Pop)
-{
-    const double rand_cum_val = gsl_rng_uniform(rng_r) * sum_fitness; 
-
-    // go through all colonies and see whether we can find the cumulative
-    // fitness value
-    for (unsigned int col_i = 0; col_i < Pop.size(); ++col_i)
-    {
-        if (rand_cum_val <= Pop[col_i].cum_fit)
-        {
-            return(col_i);
-        }
-    }
-
-    // this should not happen
-    return(gsl_rng_uniform_int(rng_r, Pop.size()));
-}// end of Draw_Parent()
-//----------------------------------------------------------------------------------------------------
-
 // generate reproducing individuals
 void Make_Sexuals(Population & Pop, Params & Par)
 {
@@ -1290,7 +1269,6 @@ void Make_Sexuals(Population & Pop, Params & Par)
 
     unsigned int new_sexual_ind = 0;
 
-
     // associate deviates with population
     for (unsigned int col_i = 0; col_i < Pop.size(); ++col_i)
     {
@@ -1304,6 +1282,7 @@ void Make_Sexuals(Population & Pop, Params & Par)
             cout << "colony: " << col_i 
                 << " cumul_sexual_counter: " << cumul_counter 
                 << " cumul fit: " << Pop[col_i].cum_fit 
+                << " sum fit: " << sum_fitness 
                 << " deviate: " << cumul_dist_samples[cumul_counter] << endl;
 
             // yes, deviate lower. make a new sexual individual from this colony
@@ -1360,15 +1339,17 @@ void Make_Colonies(Population &Pop)
 } // end Make_Colonies()
 //-----------------------------------------------------------------------------------------------------
     
-// write out the founders to a file 
-void Write_Last_Generation(Colony & Col, 
-        unsigned int colony_number,
+// write out the genetic values of all queens and males of the last
+// generation. This is done in a file lastgen.txt which can be used
+// to restart the simulation at the same point where we left off
+void Write_Last_Generation(
+        Population &Pop, 
         int generation,
         Params & Par
         ) 
 {
+    // open output file
     static ofstream last_gen_stream;
-
 
     // only plot the last generation once every 10 generations
     // or at the last generation of the simulation
@@ -1377,20 +1358,24 @@ void Write_Last_Generation(Colony & Col,
     {
         last_gen_stream.open("lastgen.txt");
 
-        if (colony_number == 0)
+        for (unsigned int col_i = 0; col_i < Pop.size(); ++col_i)
         {
-            // simpart global variable denoting which part of the total
-            // simulation we are currently running
-            last_gen_stream << simpart + 1 << endl
-                    << generation + 1 << endl;
+            if (col_i == 0)
+            {
+                // simpart global variable denoting which part of the total
+                // simulation we are currently running
+                last_gen_stream << simpart + 1 << endl
+                        << generation + 1 << endl;
+            }
+
+            last_gen_stream << Pop[col_i].male.learn << endl
+                     << Pop[col_i].male.forget << endl
+                     << Pop[col_i].queen.learn << endl
+                     << Pop[col_i].queen.forget << endl;
         }
 
-        last_gen_stream << Col.male.learn << endl
-                 << Col.male.forget << endl
-                 << Col.queen.learn << endl
-                 << Col.queen.forget << endl;
+        last_gen_stream.close();
     }
-
 } // end of WriteLastGen
 //========================================================================================================
 //
@@ -1704,6 +1689,7 @@ int main(int argc, char* argv[])
         // for myPars.maxtime timesteps
         for (unsigned int col_i = 0; col_i < MyColonies.size(); ++col_i)
         {
+            cout << "colony: " << col_i << endl;
             // initialize each colony from sexuals
             Init(MyColonies[col_i], col_i, myPars);
 
@@ -1735,7 +1721,6 @@ int main(int argc, char* argv[])
         // calculate relative fitness values
         Calc_Rel_Fitness(MyColonies, myPars);
 
-       
         // now calculate relative fitness 
         // write stats and let colonies reproduce
         //
@@ -1771,13 +1756,12 @@ int main(int argc, char* argv[])
                 Write_Ants_Beh(MyColonies[col_i], col_i, out_ants);	
             }
 #endif
-
-            Write_Last_Generation(
-                    MyColonies[col_i], 
-                    col_i,
-                    current_generation, 
-                    myPars);
         }
+
+        Write_Last_Generation(
+                MyColonies, 
+                current_generation, 
+                myPars);
 
         if (current_generation < myPars.maxgen - 1)
         {
