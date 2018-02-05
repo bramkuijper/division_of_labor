@@ -1688,7 +1688,7 @@ int main(int argc, char* argv[])
         // now go through all colonies and let them do work
         // for myPars.maxtime timesteps
 # pragma omp parallel
-        {
+       {
 # pragma omp for
             for (unsigned int col_i = 0; col_i < myPars.Col; ++col_i)
             {
