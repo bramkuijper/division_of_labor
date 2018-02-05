@@ -54,7 +54,7 @@ struct Params
     int Col; // number of colonies
     int maxtime; // time steps
     double p;  // quitting probability
-    int tasks;
+    unsigned int tasks;
     double mutp;//mutation probability
     int maxgen;
     double beta_fit, gamma_fit; // exponents of the fitness function
@@ -87,7 +87,6 @@ struct Ant
     double learn;
     double forget;
     // behaviour
-    //vector < bool > act; // active or not at task 1 or 2
     vector < double > threshold;
     vector < double > alfa; // Strenght with which experience level affects efficiency
     vector < int > countacts;   // counter of acts done by this ant
@@ -554,7 +553,6 @@ void InitAnts(Ant & myAnt, Params & Par, Colony & myCol, int numID)
         {
         myAnt.threshold[task]= Par.meanT[task];
         myAnt.experience_points[task]= 0;
-   //     myAnt.alfa[task] = Par.alfa_min[task];
         }
 
     if (Par.maxgen > 1)
@@ -592,92 +590,92 @@ void InitAnts(Ant & myAnt, Params & Par, Colony & myCol, int numID)
 
 //------------------------------------------------------------------------------------
 
-// initialize the population
+// initialize a colony
 void Init(Colony & Col, Params & Par)
 {
     // resize the colony population to fit N individuals
-    Pop[colony_i].MyAnts.resize(Par.N);
+    Col.MyAnts.resize(Par.N);
 
     // give colony particular id (for debugging purposes)
-    Pop[colony_i].ID = colony_i;
+    Col.ID = colony_i;
 
     // set colony fitness to 0
-    Pop[colony_i].fitness = 0;
-    Pop[colony_i].rel_fit = 0;
-    Pop[colony_i].cum_fit = 0;
-    Pop[colony_i].diff_fit = 0;
+    Col.fitness = 0;
+    Col.rel_fit = 0;
+    Col.cum_fit = 0;
+    Col.diff_fit = 0;
 
     // set counter of idle workers to 0
-    Pop[colony_i].idle = 0;
-    Pop[colony_i].inactive = 0;
+    Col.idle = 0;
+    Col.inactive = 0;
 
     // various specialization measurements
-    Pop[colony_i].mean_D = 10; 
-    Pop[colony_i].var_D=0;
-    Pop[colony_i].mean_Dx = 10;
-    Pop[colony_i].var_Dx = 0;
-    Pop[colony_i].mean_switches = 0;
-    Pop[colony_i].var_switches = 0;
-    Pop[colony_i].mean_workperiods=0;
-    Pop[colony_i].var_workperiods=0;
+    Col.mean_D = 10; 
+    Col.var_D=0;
+    Col.mean_Dx = 10;
+    Col.var_Dx = 0;
+    Col.mean_switches = 0;
+    Col.var_switches = 0;
+    Col.mean_workperiods=0;
+    Col.var_workperiods=0;
 
     // empty pools of workers, statistics, etc
-    Pop[colony_i].workfor.erase(
-            Pop[colony_i].workfor.begin(),
-            Pop[colony_i].workfor.end());
+    Col.workfor.erase(
+            Col.workfor.begin(),
+            Col.workfor.end());
 
-    Pop[colony_i].fitness_work.erase(
-            Pop[colony_i].fitness_work.begin(),
-            Pop[colony_i].fitness_work.end());
+    Col.fitness_work.erase(
+            Col.fitness_work.begin(),
+            Col.fitness_work.end());
 
-    Pop[colony_i].numacts_step.erase(
-            Pop[colony_i].numacts_step.begin(),
-            Pop[colony_i].numacts_step.end());
+    Col.numacts_step.erase(
+            Col.numacts_step.begin(),
+            Col.numacts_step.end());
 
-    Pop[colony_i].numacts_total.erase(
-            Pop[colony_i].numacts_total.begin(),
-            Pop[colony_i].numacts_total.end());
+    Col.numacts_total.erase(
+            Col.numacts_total.begin(),
+            Col.numacts_total.end());
 
-    Pop[colony_i].stim.erase(
-            Pop[colony_i].stim.begin(),
-            Pop[colony_i].stim.end());
+    Col.stim.erase(
+            Col.stim.begin(),
+            Col.stim.end());
 
-    Pop[colony_i].newstim.erase(
-            Pop[colony_i].newstim.begin(),
-            Pop[colony_i].newstim.end());
+    Col.newstim.erase(
+            Col.newstim.begin(),
+            Col.newstim.end());
 
-    Pop[colony_i].mean_work_alloc.erase(
-            Pop[colony_i].mean_work_alloc.begin(),
-            Pop[colony_i].mean_work_alloc.end());
+    Col.mean_work_alloc.erase(
+            Col.mean_work_alloc.begin(),
+            Col.mean_work_alloc.end());
 
     // allocate space in the various arrays
-    Pop[colony_i].workfor.reserve(Par.tasks);
-    Pop[colony_i].fitness_work.reserve(Par.tasks);
-    Pop[colony_i].numacts_step.reserve(Par.tasks);
-    Pop[colony_i].numacts_total.reserve(Par.tasks);
-    Pop[colony_i].stim.reserve(Par.tasks);
-    Pop[colony_i].newstim.reserve(Par.tasks);
-    Pop[colony_i].mean_work_alloc.reserve(Par.tasks);
+    Col.workfor.reserve(Par.tasks);
+    Col.fitness_work.reserve(Par.tasks);
+    Col.numacts_step.reserve(Par.tasks);
+    Col.numacts_total.reserve(Par.tasks);
+    Col.stim.reserve(Par.tasks);
+    Col.newstim.reserve(Par.tasks);
+    Col.mean_work_alloc.reserve(Par.tasks);
 
     // put an initial 0 in the vector
     for (int task_i = 0; task_i < Par.tasks; ++task_i)
     {
-        Pop[colony_i].workfor.push_back(0);
-        Pop[colony_i].fitness_work.push_back(0);
-        Pop[colony_i].numacts_step.push_back(0);
-        Pop[colony_i].numacts_total.push_back(0);
-        Pop[colony_i].stim.push_back(Par.initStim);
-        Pop[colony_i].newstim.push_back(0);
-        Pop[colony_i].mean_work_alloc.push_back(0);
+        Col.workfor.push_back(0);
+        Col.fitness_work.push_back(0);
+        Col.numacts_step.push_back(0);
+        Col.numacts_total.push_back(0);
+        Col.stim.push_back(Par.initStim);
+        Col.newstim.push_back(0);
+        Col.mean_work_alloc.push_back(0);
     }
 
     // go through all ants in the colony and initialize the
     // individual ants
     for (unsigned int ant_i = 0; 
-            ant_i < Pop[colony_i].MyAnts.size(); 
+            ant_i < Col.MyAnts.size(); 
             ++ant_i)
     {
-        InitAnts(Pop[colony_i].MyAnts[ant_i], Par, Pop[colony_i], ant_i);
+        InitAnts(Col.MyAnts[ant_i], Par, Col, ant_i);
     }
 } // end of Init()
 //==================================================================================================================
@@ -728,7 +726,6 @@ void UpdateThresholds_And_Experience (Ant & anyAnt, Params & Par)
             // doing), increase thresholds and decrease experience points
             anyAnt.treshold[task_i] += anyAnt.forget;
             anyAnt.experience_points[task_i] -= Par.step_lose_exp;
-
         }
 
         // note that if ant is inactive she will increase her thresholds
@@ -746,7 +743,6 @@ void UpdateThresholds_And_Experience (Ant & anyAnt, Params & Par)
             anyAnt.experience_points[task_i] = 0;
         }
     }
-
 }   
 //========================================================================================================================
 void UpdateSwitches(Ant & anyAnt, Params & Par)
@@ -1227,10 +1223,12 @@ void Calc_Abs_Fitness(Colony & Col, Params & Par)
             Col.idle +=1;
         }
     }
+
+    Col.mean_work_alloc[task_i] /= Par.maxtime - Par.tau
 }
 
 // calculate relative fitness of all colonies
-void Calc_Rel_Fitness(Population & Pop, Params &Par)
+void Calc_Rel_Fitness(Population &Pop, Params &Par)
 {
     // set the global sum_fitness variable to 0
     sum_fitness = 0;
@@ -1242,7 +1240,7 @@ void Calc_Rel_Fitness(Population & Pop, Params &Par)
         sum_fitness = Pop[col].cum_fit;
     }
 
-} // end of Calc_Abs_Fitness()
+} 
 //-------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------
 
@@ -1273,20 +1271,65 @@ void Make_Sexuals(Population & Pop, Params & Par)
     mySexuals.resize(2 * Par.Col); // number of sexuals needed
     parentCol.resize(mySexuals.size());
 
-    for (unsigned int ind = 0; ind < mySexuals.size(); ++ind)
+    // make a list of doubles that contain all the random deviates
+    // we need to sample in the cumulative fitness distribution
+    // each random deviate stands for the sampling of one sexual individual
+    // from the fitness distribution of all colonies
+    vector < double > cumul_dist_samples(mySexuals.size(), 0);
+
+    // fill the list of deviates
+    for (unsigned int sample_i = 0; sample_i < mySexuals.size(); ++sample_i)
     {
-        //initialize sexuals
-        mySexuals[ind].threshold.resize(Par.tasks);
-        mySexuals[ind].mated = false;
-
-        // draw a parent colony for each sexual
-        parentCol[ind] = Draw_Parent(Pop.size(), Pop);
-
-        Inherit(mySexuals[ind], 
-                Pop[parentCol[ind]].queen, 
-                Pop[parentCol[ind]].male, 
-                Par);
+        // store random values of the cumulative distribution in the array
+        cumul_dist_samples[sample_i] = gsl_rng_uniform(rng_r) * sum_fitness;
     }
+
+    // now sort the list of random deviates
+    // from low to high.
+    sort(cumul_dist_samples.begin(), cumul_dist_samples.end());
+
+    unsigned int cumul_counter = 0;
+
+    unsigned int new_sexual_ind = 0;
+
+
+    // associate deviates with population
+    for (unsigned int col_i = 0; col_i < Pop.size(); ++col_i)
+    {
+        // note that there 2*Ncol deviates to be found in the cumulative
+        // distribution, meaning we'd hit each colony's cumulative fitness 
+        // on average multiple times
+        //
+        // now see whether there are deviates lower than this value
+        for (; cumul_counter < mySexuals.size(); ++cumul_counter) 
+        {
+            cout << "colony: " << col_i 
+                << " cumul_sexual_counter: " << cumul_counter 
+                << " cumul fit: " << Pop[col_i].cumul_fit 
+                << " deviate: " << cumul_dist_samples[cumul_counter] << endl;
+
+            // yes, deviate lower. make a new sexual individual from this colony
+            if (cumul_dist_samples[cumul_counter] <= Pop[col_i].cumul_fit)
+            {
+                assert(new_sexual_int < mySexuals.size());
+
+                // inherit loci from the colony's founders 
+                Inherit(mySexuals[new_sexual_int], 
+                        Pop[parentCol[ind]].queen, 
+                        Pop[parentCol[ind]].male, 
+                        Par);
+
+                ++new_sexual_int;
+            }
+            else// deviate too large? Move on to the next element in cumul dist
+            {
+                break;
+            }
+        } // end for cumul_counter
+    } // end for col_i
+
+    assert(new_sexual_int == mySexuals.size());
+
 } // end of MakeSexuals
 //-------------------------------------------------------------------------------------------
 void Make_Colonies(Population &Pop)
@@ -1295,38 +1338,43 @@ void Make_Colonies(Population &Pop)
 
     for (unsigned int col = 0; col < Pop.size(); ++col)
     {
-        do {
-                mother = gsl_rng_uniform_int(rng_r, mySexuals.size());
-                father = gsl_rng_uniform_int(rng_r, mySexuals.size()) ;
-        } 
-        while (mother == father 
-                || 
-                mySexuals[mother].mated==true 
-                || 
-                mySexuals[father].mated==true);
+        assert(mySexuals.size() >= 2);
 
-    mySexuals[mother].mated = true;
-    mySexuals[father].mated = true;
+        // sample random mother
+        mother = gsl_rng_uniform_int(rng_r, mySexuals.size());
 
-    Pop[col].queen = mySexuals[mother]; Pop[col].male = mySexuals[father]; // copy new males and females
+        // make this mother the queen of Colony col
+        Pop[col].queen = mySexuals[mother];
 
-    } // end for Colonies
+        // remove this individual from stack of sexuals
+        mySexuals.erase(mySexuals.begin() + mother);
 
+        // sample random father
+        father = gsl_rng_uniform_int(rng_r, mySexuals.size());
+
+        // make this father the male of Colony col
+        Pop[col].male = mySexuals[father];
+
+        // remove break
+        mySexuals.erase(mySexuals.begin() + father);
+
+    } 
 } // end Make_Colonies()
 //-----------------------------------------------------------------------------------------------------
     
 // write out the founders to a file 
 void Write_Founders(Colony & Col, 
+        unsigned int colony_number,
         int generation, 
         Params & Par,
         ofstream &last_gen_stream
         ) 
 {
-    last_gen_stream << generation <<
-            << "\t" << colony << 
-            << "\t" << Col.male.learn << 
-            << "\t" << Col.male.forget << 
-            << "\t" << Col.queen.learn <<
+    last_gen_stream << generation
+            << "\t" << colony_number
+            << "\t" << Col.male.learn
+            << "\t" << Col.male.forget
+            << "\t" << Col.queen.learn
             << "\t" << Col.queen.forget << endl;	
 
 } // end of WriteLastGen
@@ -1410,19 +1458,19 @@ void Write_Col_Data(
 {
 	mydata << gen << "\t" << colony << "\t";
 
-	for (int task=0; task<Par.tasks; task++)
+	for (unsigned int task=0; task<Par.tasks; task++)
     {
-	    mydata << Pop[colony].fitness_work[task] 
-	            << "\t" << Pop[colony].mean_work_alloc[task]
+	    mydata << Col.fitness_work[task] 
+	            << "\t" << Col.mean_work_alloc[task];
     }
 
-    mydata << "\t" << Pop[colony].idle 
-            << "\t" << Pop[colony].inactive 
-            << "\t" << Pop[colony].fitness 
-            << "\t" << Pop[colony].stim[0] 
-            << "\t" << Pop[colony].stim[1] 
-            << "\t" << Pop[colony].mean_switches 
-            << "\t" << Pop[colony].mean_workperiods << endl;  
+    mydata << "\t" << Col.idle 
+            << "\t" << Col.inactive 
+            << "\t" << Col.fitness 
+            << "\t" << Col.stim[0] 
+            << "\t" << Col.stim[1] 
+            << "\t" << Col.mean_switches 
+            << "\t" << Col.mean_workperiods << endl;  
 }
 //------------------------------------------------------------------------------------------------------
 // write out all the alleles to get an overview of
@@ -1432,7 +1480,7 @@ void Write_Alleles_Spec(
         ofstream & data_reinforcement,
         ofstream & data_f,
         Params & Par,
-        int gen,
+        int gen)
 {
     data_reinforcement << gen << ";";
     data_reinforcement << Col.male.learn << ";"; 
@@ -1488,11 +1536,12 @@ void Header_data(ofstream & header, ofstream & header2)
 //writing data of last generation step by step
 void Write_Data_1Gen(ofstream & mydata, 
         Colony & Col, 
+        unsigned int colony_number,
         Params & Par, 
         int timestep)
 {
     // print timestep and colony number
-    mydata << timestep << ";" << col << ";"; 
+    mydata << timestep << ";" << colony_number << ";"; 
 
     // plot the perceived stimulus levels per task
     for (unsigned int task = 0; task < Par.tasks; ++task) 
@@ -1513,11 +1562,13 @@ void Write_Data_1Gen(ofstream & mydata,
 //==========================================================================================================================
 
 // write down individual ants
-void Write_Ants_Beh(Colony & Col, ofstream & mydata) 
+void Write_Ants_Beh(Colony & Col, 
+        unsigned int colony_number,
+        ofstream & mydata) 
 {
-    for (unsigned int ant = 0; ant < Pop[col].MyAnts.size(); ++ant)
+    for (unsigned int ant = 0; ant < Col.MyAnts.size(); ++ant)
     {
-        mydata << col << ";" << ant << ";" 
+        mydata << colony_number << ";" << ant << ";" 
             << Col.MyAnts[ant].threshold[0] << ";" 
             << Col.MyAnts[ant].threshold[1] << ";" 
             << Col.MyAnts[ant].countacts[0] << ";" 
@@ -1649,21 +1700,14 @@ int main(int argc, char* argv[])
             current_generation < maxgen; ++current_generation)
     {
         cout << current_generation << endl;
-        Init(MyColonies, myPars);
-       
-        // number of timesteps that fitness is counted
-        // (e.g., when time > tau)
-        double equil_steps=0;
 
-#ifdef DEBUG
-        cout << MyColonies.size() <<endl;
-        cout <<myPars.maxtime << endl;
-
-#endif
         // now go through all colonies and let them do work
         // for myPars.maxtime timesteps
-        for (int col_i = 0; col_i < MyColonies.size; ++col_i)
+        for (unsigned int col_i = 0; col_i < MyColonies.size(); ++col_i)
         {
+            // initialize each colony from sexuals
+            Init(MyColonies[col_i], myPars);
+
             // timesteps during colony development
             for (int k = 0; k < myPars.maxtime; ++k)
             {
@@ -1685,53 +1729,62 @@ int main(int argc, char* argv[])
             }
 
             // calculate absolute fitness of this population
+            // in the last timestep
             Calc_Abs_Fitness(MyColonies[col_i], myPars);
         }
+            
+        // calculate relative fitness values
+        Calc_Rel_Fitness(MyColonies, myPars);
 
+       
         // now calculate relative fitness 
         // write stats and let colonies reproduce
         //
         // we cannot use any multicore processing here,
         // as relative fitnes needs to be calculated wrt colony order
-        for (int col_i = 0; col_i < MyColonies.size; ++col_i)
+        for (unsigned int col_i = 0; col_i < MyColonies.size(); ++col_i)
         {
-            // calculate fitness values
-            Calc_Rel_Fitness(MyColonies[col_i], myPars);
-
-            // take averages over all tasks
-            for (int task = 0; task < myPars.tasks; ++task)
-            {
-                MyColonies[col].mean_work_alloc[task]/=equil_steps;
-            }
-
             // write out the data 
-            Write_Col_Data(MyColonies[col], out1, myPars, generation, col);
+            Write_Col_Data(MyColonies[col_i], 
+                    out1, 
+                    myPars, 
+                    current_generation, 
+                    col_i);
 
             // write out alleles
             Write_Alleles_Spec(
+                    MyColonies[col_i], 
                     out2, 
                     out3, 
                     myPars, 
-                    MyColonies, 
-                    generation, 
-                    col);
+                    current_generation);
 
 #ifdef WRITE_LASTGEN_PERSTEP
             //do you want to write out the last generation step by step?
-            if (g == simstart_generation + myPars.maxgen-1) 
+            if (current_generation == simstart_generation + myPars.maxgen-1) 
             {
-                Write_Data_1Gen(out5, MyColonies[col], myPars, Pars.maxtime);
+                Write_Data_1Gen(out5, 
+                        MyColonies[col_i], 
+                        col_i, 
+                        myPars, 
+                        Pars.maxtime);
 
-                Write_Ants_Beh(MyColonies[col], out_ants);	
+                Write_Ants_Beh(MyColonies[col_i], col_i, out_ants);	
             }
 #endif
-            Write_Founders(MyColonies[col], g, col,  myPars, last_gen_founders);
+            Write_Founders(
+                    MyColonies[col_i], 
+                    col_i,
+                    current_generation, 
+                    myPars, 
+                    last_gen_founders);
+        }
 
-            if (g < myPars.maxgen -1)
-            {
-                Make_Sexuals(MyColonies, myPars);
-                
-                Make_Colonies(MyColonies);
-            }
+        if (current_generation < myPars.maxgen - 1)
+        {
+            Make_Sexuals(MyColonies, myPars);
+            
+            Make_Colonies(MyColonies);
+        }
     } // end for generations
 }
