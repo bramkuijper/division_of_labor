@@ -1687,35 +1687,38 @@ int main(int argc, char* argv[])
 
         // now go through all colonies and let them do work
         // for myPars.maxtime timesteps
-        for (unsigned int col_i = 0; col_i < MyColonies.size(); ++col_i)
+# pragma omp parallel
         {
-            cout << "colony: " << col_i << endl;
-            // initialize each colony from sexuals
-            Init(MyColonies[col_i], col_i, myPars);
-
-            // timesteps during colony development
-            for (int k = 0; k < myPars.maxtime; ++k)
+# pragma omp for
+            for (unsigned int col_i = 0; col_i < myPars.Col; ++col_i)
             {
-                // update all the stimuli of the ants 
-                // and what they are doing
-                Update_Ants(MyColonies[col_i], myPars);
+                // initialize each colony from sexuals
+                Init(MyColonies[col_i], col_i, myPars);
 
-                // calculate specialization values
-                Calc_D(MyColonies[col_i], myPars); 
+                // timesteps during colony development
+                for (int k = 0; k < myPars.maxtime; ++k)
+                {
+                    // update all the stimuli of the ants 
+                    // and what they are doing
+                    Update_Ants(MyColonies[col_i], myPars);
 
-                // update statistics and if beyond tau, fitness values
-                Update_Col_Data(k, MyColonies[col_i], myPars);	
+                    // calculate specialization values
+                    Calc_D(MyColonies[col_i], myPars); 
 
-                // calculate at the end of the timestep: 
-                // the ants have done something
-                // which has consequences for stimulus levels, 
-                // which you update here
-                Update_Stim(MyColonies[col_i], myPars);
+                    // update statistics and if beyond tau, fitness values
+                    Update_Col_Data(k, MyColonies[col_i], myPars);	
+
+                    // calculate at the end of the timestep: 
+                    // the ants have done something
+                    // which has consequences for stimulus levels, 
+                    // which you update here
+                    Update_Stim(MyColonies[col_i], myPars);
+                }
+
+                // calculate absolute fitness of this population
+                // in the last timestep
+                Calc_Abs_Fitness(MyColonies[col_i], myPars);
             }
-
-            // calculate absolute fitness of this population
-            // in the last timestep
-            Calc_Abs_Fitness(MyColonies[col_i], myPars);
         }
             
         // calculate relative fitness values
