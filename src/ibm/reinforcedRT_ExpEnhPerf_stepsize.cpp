@@ -194,35 +194,35 @@ istream & Params::InitParams(istream & in)
     double tmp;
 
     // get initial threshold values for each task
-    for (int i = 0; i < tasks; ++i) 
+    for (unsigned int i = 0; i < tasks; ++i) 
     {
         in >> tmp; 
         meanT.push_back(tmp);
     }
 
     // get increase in stimulus intensity for each task
-    for (int i = 0; i < tasks; ++i) 
+    for (unsigned int i = 0; i < tasks; ++i) 
     {    
         in >> tmp; 
         delta.push_back(tmp);
     }
 
     // get maximum efficiency of work for each task
-    for (int i = 0; i < tasks; ++i)
+    for (unsigned int i = 0; i < tasks; ++i)
     {
         in >> tmp; 
         alfa_max.push_back(tmp);
     }
 
     // get minimum efficiency of work for each task
-    for (int i = 0; i < tasks; ++i)
+    for (unsigned int i = 0; i < tasks; ++i)
     {
         in >> tmp; 
         alfa_min.push_back(tmp);
     }
 
     // get stimulus decay for each task
-    for (int i = 0; i < tasks; ++i) 
+    for (unsigned int i = 0; i < tasks; ++i) 
     {
         in >> tmp;
         beta.push_back(tmp);
@@ -323,7 +323,7 @@ int CopyFile(string initialFilePath, string outputFilePath)
 //=================================================================================================================
 // Function that initializes founders from (previous) data 
 
-void StartFromLast (istream & in, Params & Par, Population & Pop)
+void Read_LastGen_Data(istream & in, Params & Par, Population & Pop)
 {
 	in >> simpart 
 	   >> simstart_generation; 
@@ -365,27 +365,27 @@ void ShowParams(Params & Par)
     cout << "Colonies " << Par.Col << endl;
     cout << "Timesteps " << Par.maxtime << endl;
 
-    for (int task=0; task<Par.tasks; task++)
+    for (unsigned int task=0; task<Par.tasks; ++task)
     {
         cout << "Initial T" <<task <<"\t" << Par.meanT[task] << endl;
     }
 
-    for (int task=0; task<Par.tasks; task++)
+    for (unsigned int task=0; task<Par.tasks; ++task)
     {
         cout << "Delta " <<task <<"\t"  << Par.delta[task] << endl;
     }
 
-    for (int task=0; task<Par.tasks; task++)
+    for (unsigned int task=0; task<Par.tasks; ++task)
     {
         cout << "max effic " << task << "\t" << Par.alfa_max[task] << endl;
     }
 
-    for (int task=0; task<Par.tasks; task++)
+    for (unsigned int task=0; task<Par.tasks; ++task)
     {
         cout << "min effic " << task << "\t" << Par.alfa_min[task] << endl;
     }
 
-    for (int task=0; task<Par.tasks; task++)
+    for (unsigned int task=0; task<Par.tasks; ++task)
     {
         cout << "Decay " << task << "\t" << Par.beta[task] << endl;
     }
@@ -410,8 +410,8 @@ void ShowParams(Params & Par)
     cout << "K" << Par.K << endl;
 }
 //========================================================================================
-// Function to initialize founders with their own thresholds and Learn and Forget parameters
-void InitFounders(Population &Pop, Params &Par)
+// Function to initialize founders at generation 0
+void Init_Founders_Generation_0(Population &Pop, Params &Par)
 {
 #ifdef DEBUG  
     // some bits are taylored for two tasks so we have to throw this assert for now
@@ -422,39 +422,31 @@ void InitFounders(Population &Pop, Params &Par)
     //cout << "Initializing founders!" << endl;
     for (unsigned int i = 0; i < Pop.size(); i++)
     {
-
         // now specify the sizes of the threshold vectors for the 
         // number of tasks which you define in the parameter file
-    Pop[i].male.threshold.resize(Par.tasks);
-    Pop[i].queen.threshold.resize(Par.tasks);
+        Pop[i].male.threshold.resize(Par.tasks);
+        Pop[i].queen.threshold.resize(Par.tasks);
 
-    // set the initial thresholds for each individual
-    for(int task=0; task<Par.tasks; task++)
+        // set the initial thresholds for each individual
+        for (unsigned int task=0; task<Par.tasks; task++)
         {
-            // option 1: all founders have equal thresholds
-        Pop[i].male.threshold[task]= Par.meanT[task];
+            Pop[i].male.threshold[task]= Par.meanT[task];
             Pop[i].queen.threshold[task]= Par.meanT[task];
-            // option 2: founders have thresholds drawn from normal distribution
-        //Pop[i].male.threshold[task]= Normal(Par.meanT[task],1);
-            //Pop[i].queen.threshold[task]= Normal(Par.meanT[task],1);
         }
 
-    // set the initial learn and forget values for the colony
-    Pop[i].male.learn = Par.initLearn;
-    Pop[i].male.forget = Par.initForget;
-    Pop[i].queen.learn = Par.initLearn;
-    Pop[i].queen.forget = Par.initForget;
+        // set the initial learn and forget values for the colony
+        Pop[i].male.learn = Par.initLearn;
+        Pop[i].male.forget = Par.initForget;
+        Pop[i].queen.learn = Par.initLearn;
+        Pop[i].queen.forget = Par.initForget;
 
-    Pop[i].male.mated =true;
-    Pop[i].queen.mated = true;
-           // cout << Pop[i].male.threshold[0] << "\t" << Pop[i].male.threshold[1] << endl;
-           // cout << Pop[i].queen.threshold[0] << "\t" << Pop[i].queen.threshold[1] << endl;
-            //getch();
+        Pop[i].male.mated =true;
+        Pop[i].queen.mated = true;
     }
 }
 //----------------------------------------------------------------------------------------------------------------------
 //=============================================================================
-//end of InitFounders()
+//end of Init_Founders_Generation_0()
 
 void Mutation(double & trait, double & parent, Params &Par)
     {
@@ -526,7 +518,7 @@ void Inherit(Ant &Daughter, Ant &Mom, Ant &Dad, Params &Par)
 // eq. 4.1 in Duarte 2012 PhD Thesis)
 void UpdateEfficiency(Ant & anyAnt, Params & Par)
 {
-    for (int task_i = 0; task_i < Par.tasks; ++task_i)
+    for (unsigned int task_i = 0; task_i < Par.tasks; ++task_i)
     {
         double tmp_1 = Par.K * anyAnt.experience_points[task_i];
         double tmp_2 = Par.alfa_min[task_i] * exp(tmp_1);
@@ -549,24 +541,26 @@ void InitAnts(Ant & myAnt, Params & Par, Colony & myCol, int numID)
     myAnt.alfa.resize(Par.tasks);
     myAnt.experience_points.resize(Par.tasks);
 
-    for (int task=0; task<Par.tasks; task++)
-        {
+    for (unsigned int task=0; task<Par.tasks; task++)
+    {
         myAnt.threshold[task]= Par.meanT[task];
         myAnt.experience_points[task]= 0;
-        }
+    }
 
     if (Par.maxgen > 1)
+    {
         Inherit(myAnt, myCol.queen, myCol.male, Par);
+    }
     else 
-        {
-            myAnt.learn= Par.initLearn;
-            myAnt.forget = Par.initForget;
-        }
+    {
+        myAnt.learn= Par.initLearn;
+        myAnt.forget = Par.initForget;
+    }
 
     myAnt.countacts.resize(Par.tasks);
     myAnt.want_task.resize(Par.tasks);
 
-    for (int task = 0; task < Par.tasks; task++)
+    for (unsigned int task = 0; task < Par.tasks; task++)
     {
         myAnt.countacts[task]=0;
         myAnt.want_task[task]=false;
@@ -591,13 +585,15 @@ void InitAnts(Ant & myAnt, Params & Par, Colony & myCol, int numID)
 //------------------------------------------------------------------------------------
 
 // initialize a colony
-void Init(Colony & Col, Params & Par)
+void Init(Colony & Col, 
+        unsigned int colony_number, 
+        Params & Par)
 {
     // resize the colony population to fit N individuals
     Col.MyAnts.resize(Par.N);
 
     // give colony particular id (for debugging purposes)
-    Col.ID = colony_i;
+    Col.ID = colony_number;
 
     // set colony fitness to 0
     Col.fitness = 0;
@@ -658,7 +654,7 @@ void Init(Colony & Col, Params & Par)
     Col.mean_work_alloc.reserve(Par.tasks);
 
     // put an initial 0 in the vector
-    for (int task_i = 0; task_i < Par.tasks; ++task_i)
+    for (unsigned int task_i = 0; task_i < Par.tasks; ++task_i)
     {
         Col.workfor.push_back(0);
         Col.fitness_work.push_back(0);
@@ -711,20 +707,20 @@ void UpdateStimPerAnt(Params & Par, Colony & anyCol, Ant & anyAnt, int task)
 void UpdateThresholds_And_Experience (Ant & anyAnt, Params & Par)
 {
     // update thresholds of all tasks
-    for (int task_i = 0; task_i < Par.tasks; ++task_i)
+    for (unsigned int task_i = 0; task_i < Par.tasks; ++task_i)
     {
         // decrease thresholds and increase experience points
         // when this is the task the ant is currently working on
-        if (anyAnt.curr_act == task_i)
+        if (anyAnt.curr_act == int(task_i))
         {
-            anyAnt.treshold[task_i] -= anyAnt.learn;
+            anyAnt.threshold[task_i] -= anyAnt.learn;
             anyAnt.experience_points[task_i] += Par.step_gain_exp;
         }
         else
         {
             // for all other tasks (which the ant is not currently 
             // doing), increase thresholds and decrease experience points
-            anyAnt.treshold[task_i] += anyAnt.forget;
+            anyAnt.threshold[task_i] += anyAnt.forget;
             anyAnt.experience_points[task_i] -= Par.step_lose_exp;
         }
 
@@ -751,7 +747,7 @@ void UpdateSwitches(Ant & anyAnt, Params & Par)
     // 1. ant is currently active
     // 2. last act wasn't inactivity
     // 3. last act was different from current act
-    if (anyAnt.curr_act < Par.tasks && 
+    if (anyAnt.curr_act < int(Par.tasks) && 
             anyAnt.last_act != 7 && 
             anyAnt.last_act != anyAnt.curr_act)
     {
@@ -833,10 +829,10 @@ void WantTask (Params Par,
     double t_noise;
 
     // loop through all tasks and calculate thresholds
-    for (int job = 0; job < Par.tasks; ++job)
+    for (unsigned int task_i = 0; task_i < Par.tasks; ++task_i)
     {
         // calculate threshold + random noise
-        t_noise = focalAnt.threshold[job] + gsl_ran_gaussian(rng_r, Par.threshold_noise);
+        t_noise = focalAnt.threshold[task_i] + gsl_ran_gaussian(rng_r, Par.threshold_noise);
 
         // threshold cannot be negative
         if (t_noise < 0)
@@ -847,15 +843,15 @@ void WantTask (Params Par,
         // ants want to work on tasks for which 
         // - their threshold exceeds the threshold + noise
         // - the stimulus level is nonzero (i.e., work needs to be done)
-        if (anyCol.stim[job] >= t_noise && anyCol.stim[job] > 0) 
+        if (anyCol.stim[task_i] >= t_noise && anyCol.stim[task_i] > 0) 
         {
             // store the wanted task
-            wanted_task_ids.push_back(job);  
+            wanted_task_ids.push_back(task_i);  
         } 
         else // ok ant does not want this task
         {
             // if ant's threshold not high enough, then quit with wanting task
-            focalAnt.want_task[job] = false;
+            focalAnt.want_task[task_i] = false;
         }
     }
 
@@ -869,7 +865,7 @@ void WantTask (Params Par,
     else if (!wanted_task_ids.empty())
     {
         assert(wanted_task_ids[0] >= 0);
-        assert(wanted_task_ids[0] < Par.tasks);
+        assert(wanted_task_ids[0] < int(Par.tasks));
 
         focalAnt.want_task[wanted_task_ids[0]] = true;
     }
@@ -935,7 +931,7 @@ void TaskChoice(
 #endif
 
      // find out if ant wants to perform a task
-    for (int task_i = 0; task_i < Par.tasks; ++task_i)
+    for (unsigned int task_i = 0; task_i < Par.tasks; ++task_i)
     {
         // yes, ant wants to perform task so let's do it
         if (focalAnt.want_task[task_i])
@@ -951,7 +947,7 @@ void TaskChoice(
     WantTask(Par, anyCol, focalAnt);
 
      // find out if ant now wants to perform a task
-    for (int task_i = 0; task_i < Par.tasks; ++task_i)
+    for (unsigned int task_i = 0; task_i < Par.tasks; ++task_i)
     {
         // yes, ant wants to perform task so let's do it
         if (focalAnt.want_task[task_i])
@@ -965,13 +961,13 @@ void TaskChoice(
 
 // if ant is working, see whether it might quit
 // if ant is not working, see whether it might start a task
-void Update_Ants(Colony & col, Params & Par)
+void Update_Ants(Colony & Col, Params & Par)
 {
     // go through all tasks and reset their stats to 0
-    for (int task =0; task < Par.tasks; ++task)
+    for (unsigned int task_i = 0; task_i < Par.tasks; ++task_i)
     {
-         Col.workfor[task] = 0; 
-         Col.numacts_step[task] = 0;
+         Col.workfor[task_i] = 0; 
+         Col.numacts_step[task_i] = 0;
     }
 
     // randomize order of ants 
@@ -981,7 +977,7 @@ void Update_Ants(Colony & col, Params & Par)
     for (unsigned int ant_i = 0; ant_i < Col.MyAnts.size(); ++ant_i)  
     {
         // check if ant is doing one of the tasks
-        if (Col.MyAnts[ant_i].curr_act < Par.tasks) 
+        if (Col.MyAnts[ant_i].curr_act < int(Par.tasks))
         {
             // yes, ant is busy, hence record last act
             Col.MyAnts[ant_i].last_act = Col.MyAnts[ant_i].curr_act; 
@@ -993,7 +989,7 @@ void Update_Ants(Colony & col, Params & Par)
         // ant currently inactive, let it choose a task
         // (note that this can include an ant
         // who quit in the previous statement)
-        if (Col.MyAnts[ant_i].curr_act >= Par.tasks)
+        if (Col.MyAnts[ant_i].curr_act >= int(Par.tasks))
         {
             TaskChoice(Par, Col, Col.MyAnts[ant_i]);
         }
@@ -1023,7 +1019,7 @@ void Update_Col_Data(
     for (unsigned int ant_i = 0; ant_i < Col.MyAnts.size(); ++ant_i)
     {
         // check whether ant is active
-        if (Col.MyAnts[ant_i].curr_act < Par.tasks)
+        if (Col.MyAnts[ant_i].curr_act < int(Par.tasks))
         {
             // if active update act count
             Col.numacts_step[Col.MyAnts[ant_i].curr_act] += 1; 
@@ -1037,7 +1033,7 @@ void Update_Col_Data(
     }
     
     // update counts of the total acts performed in the colony
-    for (int task_i = 0; task_i < Par.tasks; ++task_i)
+    for (unsigned int task_i = 0; task_i < Par.tasks; ++task_i)
     {
         Col.numacts_total[task_i] += Col.numacts_step[task_i]; 
     
@@ -1054,7 +1050,7 @@ void Update_Col_Data(
 //===================================================================================================
 void Update_Stim(Colony &Col, Params & Par)   // stimulus changes const increase
 {
-    for (int task=0; task<Par.tasks; task++)
+    for (unsigned int task=0; task<Par.tasks; task++)
     {
 #ifdef SIMULTANEOUS_UPDATE
         // update the stimulus for this task
@@ -1077,7 +1073,7 @@ void Update_Stim(Colony &Col, Params & Par)   // stimulus changes const increase
 //==============================================================================================
 
 // calculate specialization value
-void Calc_D(Colony & col, Params & Par)
+void Calc_D(Colony & Col, Params & Par)
 {
     Col.mean_D=0;
     Col.mean_Dx=0; 
@@ -1101,13 +1097,13 @@ void Calc_D(Colony & col, Params & Par)
     double total_work = 0;
 
     // sum total work
-    for (int task_i = 0; task_i < Par.tasks; ++task_i)
+    for (unsigned int task_i = 0; task_i < Par.tasks; ++task_i)
     {
         total_work += Col.numacts_total[task_i];
     }
 
     // then it is easy to calculate proportions
-    for (int task_i = 0; task_i < Par.tasks; ++task_i)
+    for (unsigned int task_i = 0; task_i < Par.tasks; ++task_i)
     {
         prop_work[task_i] = Col.numacts_total[task_i] / total_work;
 
@@ -1157,7 +1153,7 @@ void Calc_D(Colony & col, Params & Par)
             // is total number of switches divided by total possible
             // moments to switch (which is total number of workperiods - 1)
             // -1 as you cannot switch anymore during the last work period
-            switch_prob = double(Pop[i].MyAnts[ant_i].switches) / 
+            switch_prob = double(Col.MyAnts[ant_i].switches) / 
                 (Col.MyAnts[ant_i].workperiods - 1.0);
 
             // D = qbar (see eq (5) in Duarte et al) is then given by
@@ -1171,9 +1167,9 @@ void Calc_D(Colony & col, Params & Par)
 
             // or in case we want to correct for the fact that ants may
             // remain at the same task due to randomness, we have to divide
-            // by D_denom. We have to substract 1.0 to scale between
+            // by D_denominator. We have to substract 1.0 to scale between
             // -1 and 1
-            Col.MyAnts[ant_i].Dx = (1.0 - switch_prob) / D_denom - 1.0;
+            Col.MyAnts[ant_i].Dx = (1.0 - switch_prob) / D_denominator - 1.0;
             
             sumsquares_Dx += Col.MyAnts[ant_i].Dx * Col.MyAnts[ant_i].Dx;
 
@@ -1207,10 +1203,13 @@ void Calc_Abs_Fitness(Colony & Col, Params & Par)
 {
     Col.fitness = 0;
 
-    for (int task_i = 0; task_i < Par.tasks; ++task_i)
+    for (unsigned int task_i = 0; task_i < Par.tasks; ++task_i)
     {
         // multiplicative fitness
         Col.fitness *= Col.fitness_work[task_i];
+    
+        // also average work allocation over all necessary timesteps
+        Col.mean_work_alloc[task_i] /= Par.maxtime - Par.tau;
     }
     
     Col.idle = 0;
@@ -1224,7 +1223,6 @@ void Calc_Abs_Fitness(Colony & Col, Params & Par)
         }
     }
 
-    Col.mean_work_alloc[task_i] /= Par.maxtime - Par.tau
 }
 
 // calculate relative fitness of all colonies
@@ -1305,21 +1303,21 @@ void Make_Sexuals(Population & Pop, Params & Par)
         {
             cout << "colony: " << col_i 
                 << " cumul_sexual_counter: " << cumul_counter 
-                << " cumul fit: " << Pop[col_i].cumul_fit 
+                << " cumul fit: " << Pop[col_i].cum_fit 
                 << " deviate: " << cumul_dist_samples[cumul_counter] << endl;
 
             // yes, deviate lower. make a new sexual individual from this colony
-            if (cumul_dist_samples[cumul_counter] <= Pop[col_i].cumul_fit)
+            if (cumul_dist_samples[cumul_counter] <= Pop[col_i].cum_fit)
             {
-                assert(new_sexual_int < mySexuals.size());
+                assert(new_sexual_ind < mySexuals.size());
 
                 // inherit loci from the colony's founders 
-                Inherit(mySexuals[new_sexual_int], 
-                        Pop[parentCol[ind]].queen, 
-                        Pop[parentCol[ind]].male, 
+                Inherit(mySexuals[new_sexual_ind], 
+                        Pop[parentCol[col_i]].queen, 
+                        Pop[parentCol[col_i]].male, 
                         Par);
 
-                ++new_sexual_int;
+                ++new_sexual_ind;
             }
             else// deviate too large? Move on to the next element in cumul dist
             {
@@ -1328,7 +1326,7 @@ void Make_Sexuals(Population & Pop, Params & Par)
         } // end for cumul_counter
     } // end for col_i
 
-    assert(new_sexual_int == mySexuals.size());
+    assert(new_sexual_ind == mySexuals.size());
 
 } // end of MakeSexuals
 //-------------------------------------------------------------------------------------------
@@ -1363,19 +1361,35 @@ void Make_Colonies(Population &Pop)
 //-----------------------------------------------------------------------------------------------------
     
 // write out the founders to a file 
-void Write_Founders(Colony & Col, 
+void Write_Last_Generation(Colony & Col, 
         unsigned int colony_number,
-        int generation, 
-        Params & Par,
-        ofstream &last_gen_stream
+        int generation,
+        Params & Par
         ) 
 {
-    last_gen_stream << generation
-            << "\t" << colony_number
-            << "\t" << Col.male.learn
-            << "\t" << Col.male.forget
-            << "\t" << Col.queen.learn
-            << "\t" << Col.queen.forget << endl;	
+    static ofstream last_gen_stream;
+
+
+    // only plot the last generation once every 10 generations
+    // or at the last generation of the simulation
+    if (generation % 10 == 0 ||
+            generation - simstart_generation == Par.maxgen - 1)
+    {
+        last_gen_stream.open("lastgen.txt");
+
+        if (colony_number == 0)
+        {
+            // simpart global variable denoting which part of the total
+            // simulation we are currently running
+            last_gen_stream << simpart + 1 << endl
+                    << generation + 1 << endl;
+        }
+
+        last_gen_stream << Col.male.learn << endl
+                 << Col.male.forget << endl
+                 << Col.queen.learn << endl
+                 << Col.queen.forget << endl;
+    }
 
 } // end of WriteLastGen
 //========================================================================================================
@@ -1388,8 +1402,7 @@ void Name_Data_Files(
         string &data4, 
         string &data5, 
         string &data6, 
-        string &dataant,
-        string &founders
+        string &dataant
         )
 {
     stringstream tmp;
@@ -1419,10 +1432,6 @@ void Name_Data_Files(
     stringstream tmp7;
     tmp7 << "ant_beh_" << simpart << ".txt";
     dataant = tmp7.str();
-    
-    stringstream tmp8;
-    tmp8 << "lastgen" << simpart << ".txt";
-    founders = tmp8.str();
 }
 //=====================================================================================================
 
@@ -1436,7 +1445,7 @@ void Continue_Previous_Run_Yes_No(Params & Par, Population & Pop)
 	if (FileExists("lastgen.txt"))
     {
         ifstream inp("lastgen.txt");
-        StartFromLast(inp, Par, Pop);
+        Read_LastGen_Data(inp, Par, Pop);
     }
 	else 
     {
@@ -1544,7 +1553,7 @@ void Write_Data_1Gen(ofstream & mydata,
     mydata << timestep << ";" << colony_number << ";"; 
 
     // plot the perceived stimulus levels per task
-    for (unsigned int task = 0; task < Par.tasks; ++task) 
+    for (int task = 0; task < Par.tasks; ++task) 
     {
         mydata << Col.stim[task] << ";"; 
     }
@@ -1622,7 +1631,7 @@ int main(int argc, char* argv[])
 
     // initialize the founders of all the colonies
     Population MyColonies;
-    InitFounders(MyColonies, myPars);
+    Init_Founders_Generation_0(MyColonies, myPars);
 
     // this simulation run might a a continuation of a previous 
     // simulation, for example when that simulation was broken off
@@ -1638,8 +1647,7 @@ int main(int argc, char* argv[])
            datafile4, 
            datafile5, 
            datafile6, 
-           dataants,
-           datafounders;
+           dataants;
 
     // function to give the datafiles particular names
     Name_Data_Files(
@@ -1649,8 +1657,8 @@ int main(int argc, char* argv[])
             datafile4, 
             datafile5, 
             datafile6, 
-            dataants,
-            datafounders);
+            dataants
+            );
 
     // the corresponding output files
     static ofstream out1; 
@@ -1662,7 +1670,6 @@ int main(int argc, char* argv[])
     static ofstream header1;
     static ofstream header2;
     static ofstream out_ants;
-    static ofstream last_gen_founders;
 
     out1.open(datafile1.c_str());
 
@@ -1677,14 +1684,6 @@ int main(int argc, char* argv[])
         
     out2.open(datafile2.c_str());
     out3.open(datafile3.c_str());    
-
-    last_gen_founders.open(datafounders.c_str());
-
-    last_gen_founders << "generation\tcolony"
-        << "\tmale_learn\tmale_forget\tqueen_learn\tqueen_forget" << endl;
-
-
-
 
 #ifdef WRITE_LASTGEN_PERSTEP 
     out_ants.open(dataants.c_str()); 
@@ -1706,7 +1705,7 @@ int main(int argc, char* argv[])
         for (unsigned int col_i = 0; col_i < MyColonies.size(); ++col_i)
         {
             // initialize each colony from sexuals
-            Init(MyColonies[col_i], myPars);
+            Init(MyColonies[col_i], col_i, myPars);
 
             // timesteps during colony development
             for (int k = 0; k < myPars.maxtime; ++k)
@@ -1772,12 +1771,12 @@ int main(int argc, char* argv[])
                 Write_Ants_Beh(MyColonies[col_i], col_i, out_ants);	
             }
 #endif
-            Write_Founders(
+
+            Write_Last_Generation(
                     MyColonies[col_i], 
                     col_i,
                     current_generation, 
-                    myPars, 
-                    last_gen_founders);
+                    myPars);
         }
 
         if (current_generation < myPars.maxgen - 1)
