@@ -1687,8 +1687,8 @@ int main(int argc, char* argv[])
 
         // now go through all colonies and let them do work
         // for myPars.maxtime timesteps
-# pragma omp parallel
-       {
+# pragma omp parallel num_threads(2)
+      {
 # pragma omp for
             for (unsigned int col_i = 0; col_i < myPars.Col; ++col_i)
             {
@@ -1719,7 +1719,7 @@ int main(int argc, char* argv[])
                 // in the last timestep
                 Calc_Abs_Fitness(MyColonies[col_i], myPars);
             }
-        }
+       }
             
         // calculate relative fitness values
         Calc_Rel_Fitness(MyColonies, myPars);
