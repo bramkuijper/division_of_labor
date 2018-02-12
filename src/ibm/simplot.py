@@ -41,19 +41,29 @@ branch_data = pd.read_csv(
 def generate_pivot(the_data, generation_col_name, x, yvars):
 
     # ok get the unique number of generations
-    generations = the_data[generation_col_name].unique().sort_values()
+    generations = list(the_data[generation_col_name].unique())
+
+    generations.sort()
 
     for yvar_i in yvars:
 
         # get min and max of data
-        min(the_d
+        minval = min(the_data[yvar_i])
+        maxval = min(the_data[yvar_i])
 
-        bins = seq(
+        overall_histogram = 
 
-        # make a histogram for each generation and store it
-        the_data[the_data
+        for generation_i in generations:
 
+            # make a histogram for each generation and store it
+            histo = np.histogram(
+                    a = the_data[yvar_i], 
+                    bins = 100,
+                    range = (minval, maxval))
 
+            data_this_gen = 
+
+            print(histo[0])
 
     the_pivot = the_data.pivot_table(
             values=z, 
@@ -69,12 +79,23 @@ def generate_pivot(the_data, generation_col_name, x, yvars):
     return(x, y, z)
 
 
+# generate a pivot table
+branch_data_pivot = generate_pivot(
+        the_data = branch_data, 
+        generation_col_name = "generation",
+        x = "generation",
+        yvars = ["learn", "forget" ])
+
+
 
 # initialize the figure
 fig = plt.figure(figsize=(14,5))
 
 widths = [ 1, 1, 1, 0.05 ]
 heights = [ 1, 0.1]
+
+
+
 
 gs = gridspec.GridSpec(
         nrows=len(heights),
@@ -84,6 +105,5 @@ gs = gridspec.GridSpec(
 
 ax = plt.subplot(gs[0,0])
 
-ax.imshow
 
-(xqS, yqS, zqS) = generate_pivot(data, x="generation", y="bin", z="qS")
+

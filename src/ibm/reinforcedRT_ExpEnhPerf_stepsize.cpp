@@ -1666,8 +1666,14 @@ int main(int argc, char* argv[])
 
     // write headers to datafiles
     Header_data(header1, header2);
-        
+    
+    // data for the allelic distribution
     out2.open(datafile2.c_str());
+
+    // add data headers
+    out2 << "generation;learn;forget" << endl;
+
+
     out3.open(datafile3.c_str());    
 
 #ifdef WRITE_LASTGEN_PERSTEP 
