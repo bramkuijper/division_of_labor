@@ -26,6 +26,9 @@ class RunGenerator:
     job_file_postfix = ".qsub"
     run_dir_prefix = "core"
     runtime_mins = 800 
+
+    # TODO 
+    # make destination directory clearer
         
     # some path necessary to compile stuff 
     ld_path = "/cm/shared/apps/gsl/gcc/1.16/lib"
