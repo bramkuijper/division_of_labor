@@ -160,8 +160,11 @@ void writeHistograms(
             break;
         }
 
-        histostrings[itemnum] << itos(generation) << ";" 
-            << header_item << ";%g;";
+        if (itemnum > 0)
+        {
+            histostrings[itemnum-1] << itos(generation) << ";" 
+                << header_item << ";%f;";
+        }
 
         ++itemnum;
     }
@@ -170,9 +173,7 @@ void writeHistograms(
     {
         gsl_histogram_fprintf(
                 file, 
-                histograms[i], 
-                "%g;", 
-                histostrings[i].str().c_str());
+                histograms[i],"%e;",histostrings[i].str().c_str());
     }
 }
 

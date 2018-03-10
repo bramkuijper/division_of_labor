@@ -1279,11 +1279,11 @@ void Make_Sexuals(Population & Pop, Params & Par)
         // now see whether there are deviates lower than this value
         for (; cumul_counter < mySexuals.size(); ++cumul_counter) 
         {
-            cout << "colony: " << col_i 
-                << " cumul_sexual_counter: " << cumul_counter 
-                << " cumul fit: " << Pop[col_i].cum_fit 
-                << " sum fit: " << sum_fitness 
-                << " deviate: " << cumul_dist_samples[cumul_counter] << endl;
+//            cout << "colony: " << col_i 
+//                << " cumul_sexual_counter: " << cumul_counter 
+//                << " cumul fit: " << Pop[col_i].cum_fit 
+//                << " sum fit: " << sum_fitness 
+//                << " deviate: " << cumul_dist_samples[cumul_counter] << endl;
 
             // yes, deviate lower. make a new sexual individual from this colony
             if (cumul_dist_samples[cumul_counter] <= Pop[col_i].cum_fit)

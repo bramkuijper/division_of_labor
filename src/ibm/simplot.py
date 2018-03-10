@@ -34,7 +34,7 @@ branch_data = pd.read_csv(
         filepath_or_buffer=sys.argv[1], 
         sep=";", 
         header=None, # no header
-        names=["generation","learn","forget"] # hence provide header names
+        names=["minval","maxval","forget"] # hence provide header names
         )
 
 # generate the pivot table that is necessary to plot it in imshow()
@@ -47,28 +47,10 @@ def generate_pivot(the_data, generation_col_name, x, yvars):
 
     for yvar_i in yvars:
 
-        # get min and max of data
-        minval = min(the_data[yvar_i])
-        maxval = min(the_data[yvar_i])
-
-        overall_histogram = 
-
-        for generation_i in generations:
-
-            # make a histogram for each generation and store it
-            histo = np.histogram(
-                    a = the_data[yvar_i], 
-                    bins = 100,
-                    range = (minval, maxval))
-
-            data_this_gen = 
-
-            print(histo[0])
-
-    the_pivot = the_data.pivot_table(
-            values=z, 
-            index=y, 
-            columns=x)
+        the_pivot = the_data.pivot_table(
+                values=z, 
+                index=y, 
+                columns=x)
 
     x, y = np.meshgrid(
             the_pivot.columns.values, 
