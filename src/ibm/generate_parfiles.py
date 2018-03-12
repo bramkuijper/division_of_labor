@@ -150,10 +150,11 @@ class RunGenerator:
         # first generate the contents of the file
         file_contents = ""
 
-        for item_number, value in param_data.iteritems():
-            file_contents += str(value) + "\n"
+        for param_key, param_value in param_data.iteritems():
+            file_contents += str(param_value) + ";" + param_key + "\n"
 
         # create the parameter file
+        # as a subdirectory of the run folder:
         param_file = run_folder / self.param_file_name
 
         # and write to it
@@ -176,25 +177,25 @@ def expand_grid(data_dict):
         columns=data_dict.keys(),
         dtype=object))
 
-maxtime = 1000 
+maxtime = 3000 
 # make a dictionary of all the parameters
 pardict = {
         "N":[100], # number of workers / colony
         "Col": [1000], # number of colonies
         "maxtime": [maxtime], # time steps work is performed before reproduction
-        "meanT1" : [ 1.0 ], # mean threshold for each task
-        "meanT2" : [ 1.0 ], # mean threshold for each task
+        "meanT1" : [ 10.0 ], # mean threshold for each task
+        "meanT2" : [ 10.0 ], # mean threshold for each task
         "delta1" : [ 1.0 ], # mean threshold for each task
         "delta2" : [ 1.0 ], # mean threshold for each task
-        "alpha_max_1" : [ 0.03 ], # maximum work efficiency task 1
-        "alpha_max_2" : [ 0.03 ], # maximum work efficiency task 1
-        "alpha_min_1" : [ 3.3e-05 ], # minimum work efficiency task 1
-        "alpha_min_2" : [ 3.3e-05 ], # minimum work efficiency task 1
+        "alpha_max_1" : [ 10 ], # maximum work efficiency task 1
+        "alpha_max_2" : [ 10 ], # maximum work efficiency task 1
+        "alpha_min_1" : [ 0.03 ], # minimum work efficiency task 1
+        "alpha_min_2" : [ 0.03 ], # minimum work efficiency task 1
         "beta_1" : [ 3.3e-05 ], # stimulus decay task 1
         "beta_2" : [ 3.3e-05 ], # stimulus decay task 2 
         "p": [0.2], # quitting probability
         "mutp" : [0.01], # mutation probability
-        "maxgen" : [5], # number of generations 
+        "maxgen" : [10000], # number of generations 
         "beta_fit" : [1.0], # exponent task 1 (not used)
         "gamma_fit" : [1.0], # exponent task 2 (not used)
         "recomb" : [0.5], # recombination rate
@@ -227,4 +228,5 @@ rg = RunGenerator(
         exe="xreinforcedRT"
         )
 
+# generate the batch
 rg.generate_batch()

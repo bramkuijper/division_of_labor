@@ -184,45 +184,75 @@ istream & Params::InitParams(istream & in)
     beta.reserve(tasks);
 
     // read in parameter values from the input stream (file)
-    in >> N >> // 
+    string tmp; // temporary string value to hold value in parameter value
+
+    // read in population size
+    getline(in, tmp, ';'); 
+    N = stoi(tmp);
+
+    // skip the remainder
+    getline(in, tmp); 
+    tmp="";
+
+    // read in colony number 
+    getline(in, tmp, ';'); 
+    Col = stoi(tmp);
+    
+    // skip the remainder
+    getline(in, tmp); 
+    tmp="";
+
+    // read in maxtime
+    getline(in, tmp, ';'); 
+    maxtime = stoi(tmp);
+    
+    // skip the remainder
+    getline(in, tmp); 
+    tmp="";
+
+    cout << N << ";" << Col << ";" << maxtime << ";" << endl;
+
+    exit(1);
+
+    in >> 
         Col >> // number of colonies
         maxtime;  // number of timesteps work is performed before reproduction
    
-    double tmp;
+    double tmpdbl;
 
     // get initial threshold values for each task
     for (unsigned int i = 0; i < tasks; ++i) 
     {
-        in >> tmp; 
-        meanT.push_back(tmp);
+        in >> tmpdbl; 
+        meanT.push_back(tmpdbl);
     }
 
     // get increase in stimulus intensity for each task
     for (unsigned int i = 0; i < tasks; ++i) 
     {    
-        in >> tmp; 
-        delta.push_back(tmp);
+        in >> tmpdbl; 
+        delta.push_back(tmpdbl);
     }
 
     // get maximum efficiency of work for each task
     for (unsigned int i = 0; i < tasks; ++i)
     {
-        in >> tmp; 
-        alfa_max.push_back(tmp);
+        in >> tmpdbl; 
+        alfa_max.push_back(tmpdbl);
     }
 
     // get minimum efficiency of work for each task
     for (unsigned int i = 0; i < tasks; ++i)
     {
-        in >> tmp; 
-        alfa_min.push_back(tmp);
+        in >> tmpdbl; 
+        alfa_min.push_back(tmpdbl);
     }
 
     // get stimulus decay for each task
     for (unsigned int i = 0; i < tasks; ++i) 
     {
-        in >> tmp;
-        beta.push_back(tmp);
+        in >> tmpdbl;
+        beta.push_back(tmpdbl);
     }
 
     in >> p >> // quitting probability
@@ -1689,7 +1719,7 @@ int main(int argc, char* argv[])
     for (int current_generation = simstart_generation; 
             current_generation < maxgen; ++current_generation)
     {
-        cout << current_generation << endl;
+        cout << "generation: " << current_generation << " end " << endl;
 
         // now go through all colonies and let them do work
         // for myPars.maxtime timesteps
