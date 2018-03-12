@@ -176,11 +176,11 @@ def expand_grid(data_dict):
         columns=data_dict.keys(),
         dtype=object))
 
-maxtime = 10 
+maxtime = 1000 
 # make a dictionary of all the parameters
 pardict = {
         "N":[100], # number of workers / colony
-        "Col": [5, 10], # number of colonies
+        "Col": [1000], # number of colonies
         "maxtime": [maxtime], # time steps work is performed before reproduction
         "meanT1" : [ 1.0 ], # mean threshold for each task
         "meanT2" : [ 1.0 ], # mean threshold for each task

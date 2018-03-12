@@ -535,7 +535,7 @@ void UpdateEfficiency(Ant & anyAnt, Params & Par)
 
 // now initialize an ant
 void InitAnts(Ant & myAnt, Params & Par, Colony & myCol, int numID)
-    {
+{
     myAnt.ID_ant = numID;
     myAnt.threshold.resize(Par.tasks);
     myAnt.alfa.resize(Par.tasks);
@@ -579,7 +579,7 @@ void InitAnts(Ant & myAnt, Params & Par, Colony & myCol, int numID)
     myAnt.mated = false;
     myAnt.count_time=0;
     UpdateEfficiency(myAnt, Par); 
-    }
+}
 
 
 //------------------------------------------------------------------------------------
@@ -1450,11 +1450,11 @@ void Write_Col_Data(
         int gen,
         int colony)
 {
-	mydata << gen << "\t" << colony << "\t";
+	mydata << gen << "\t" << colony;
 
-	for (unsigned int task=0; task<Par.tasks; task++)
+	for (unsigned int task = 0; task < Par.tasks; ++task)
     {
-	    mydata << Col.fitness_work[task] 
+	    mydata << "\t" << Col.fitness_work[task] 
 	            << "\t" << Col.mean_work_alloc[task];
     }
 

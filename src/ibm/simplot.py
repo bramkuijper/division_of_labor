@@ -29,28 +29,46 @@ rcParams['text.latex.preamble'] = [
        r'\sansmath'               # <- tricky! -- gotta actually tell tex to use!
 ]
 
-# get branch data
+# get colony spec data
+# first read the header file
+f = open("header_1.txt")
+fl = f.readlines()
+f.close()
+
+header = fl[0].split("\t")
+
+work_alloc_data = pd.read_csv("data_work_alloc_1.txt",
+        sep="\t",
+        header=None,
+        index_col=False,
+        names=header)
+
+print(work_alloc_data.head())
+
+sys.exit(1)
+
+# get data on branching for learning and forgetting
 branch_data = pd.read_csv(
         filepath_or_buffer=sys.argv[1], 
         sep=";", 
         header=None, # no header
-        names=["minval","maxval","forget"] # hence provide header names
+        index_col=False,
+        names=["minbin","maxbin","generation","trait","count"] # hence provide header names
         )
 
+def the_pow(x):
+    return(x**(0.25))
+
+branch_data["count"] = branch_data["count"].apply(the_pow)
+
 # generate the pivot table that is necessary to plot it in imshow()
-def generate_pivot(the_data, generation_col_name, x, yvars):
+def generate_pivot(the_data, x, y, z):
 
-    # ok get the unique number of generations
-    generations = list(the_data[generation_col_name].unique())
-
-    generations.sort()
-
-    for yvar_i in yvars:
-
-        the_pivot = the_data.pivot_table(
-                values=z, 
-                index=y, 
-                columns=x)
+    # make a pivot table
+    the_pivot = the_data.pivot_table(
+            values=z, 
+            index=y, 
+            columns=x)
 
     x, y = np.meshgrid(
             the_pivot.columns.values, 
@@ -61,24 +79,32 @@ def generate_pivot(the_data, generation_col_name, x, yvars):
     return(x, y, z)
 
 
-# generate a pivot table
-branch_data_pivot = generate_pivot(
-        the_data = branch_data, 
-        generation_col_name = "generation",
-        x = "generation",
-        yvars = ["learn", "forget" ])
+# generate a pivot table for learning
+(x_learn, y_learn, learn_count) = generate_pivot(
+        the_data = branch_data[branch_data["trait"]=="learn"], 
+        x="generation",
+        y="minbin",
+        z="count"
+        )
 
+# generate a pivot table for forgetting
+(x_forget, y_forget, forget_count) = generate_pivot(
+        the_data = branch_data[branch_data["trait"]=="forget"], 
+        x="generation",
+        y="minbin",
+        z="count"
+        )
 
 
 # initialize the figure
 fig = plt.figure(figsize=(14,5))
 
-widths = [ 1, 1, 1, 0.05 ]
-heights = [ 1, 0.1]
+# generate the grid of the graph
+# see: 
+widths = [ 1, 0.05 ]
+heights = [ 1, 1]
 
-
-
-
+# make 
 gs = gridspec.GridSpec(
         nrows=len(heights),
         ncols=len(widths),
@@ -87,5 +113,38 @@ gs = gridspec.GridSpec(
 
 ax = plt.subplot(gs[0,0])
 
+# the plot for learning
+ax.imshow(learn_count,
+    cmap="jet",
+    extent=[x_learn.min(), 
+        x_learn.max(), 
+        y_learn.min(), 
+        y_learn.max()],
+    origin="lower",
+    aspect="auto")
+
+ax.set_ylabel(r"Learning")
+
+# start next entry of the graph
+ax = plt.subplot(gs[1,0])
+
+# the plot for learning
+ax.imshow(forget_count,
+    cmap="jet",
+    extent=[x_forget.min(), 
+        x_forget.max(), 
+        y_forget.min(), 
+        y_forget.max()],
+    origin="lower",
+    aspect="auto")
+
+ax.set_ylabel(r"Forgetting")
 
 
+
+
+format = "pdf"
+
+plt.savefig("graph_simplot." + format, 
+        format=format, 
+        bbox_inches="tight")
