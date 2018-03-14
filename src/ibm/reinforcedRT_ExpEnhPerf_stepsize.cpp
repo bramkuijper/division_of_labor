@@ -44,7 +44,7 @@ using namespace std;
 // random number generator 
 // see http://www.gnu.org/software/gsl/manual/html_node/Random-Number-Generation.html#Random-Number-Generation 
 gsl_rng_type const * T; // gnu scientific library rng type
-gsl_rng *rng_r; // gnu scientific rng 
+gsl_rng *rng_global; // gnu scientific rng 
 
 
 struct Params
@@ -78,6 +78,9 @@ struct Params
     vector<double> beta;
     
     istream & Init_Params(istream & inp);
+
+
+
 };
 
 struct Ant
@@ -124,12 +127,15 @@ struct Colony
     double idle; // proportion workers that _never_ worked in the simulation 
     double inactive; // proportion workers that were idle each time step
 
-    vector <double>fitness_work; //number of acts * eff performed in the time steps counting for fitness 
+    vector <double> fitness_work; //number of acts * eff performed in the time steps counting for fitness 
     double fitness;
     double rel_fit; // fitness relative to whole population
     double cum_fit; //cumulative fitness
-    vector<double>mean_work_alloc;
 
+    // number of acts performed per task each time step
+    // yet only counted in the interval that colony productivity is counted
+    // i.e., maxtime - tau
+    vector<double> mean_work_alloc; 
 
     double mean_D;
     double var_D;
@@ -359,6 +365,8 @@ istream & Params::Init_Params(istream & in)
     // obtain timestep from which fitness is counted
     getline(in, tmp, ';'); 
     tau = stoi(tmp);
+
+    assert(tau < maxtime);
 
     // skip the remainder
     getline(in, tmp); 
@@ -634,7 +642,7 @@ void Init_Founders_Generation_0(Population &Pop, Params &Par)
 //=============================================================================
 //end of Init_Founders_Generation_0()
 
-void Mutation(double & trait, double & parent, Params &Par)
+void Mutation(double & trait, double & parent, Params &Par, gsl_rng *rng_r)
     {
         if (Par.mutp > gsl_rng_uniform(rng_r))
             trait = parent + gsl_ran_gaussian(rng_r, Par.mutstep);
@@ -643,7 +651,7 @@ void Mutation(double & trait, double & parent, Params &Par)
 
 //==============================================================================
 //end of Mutation()
-void Inherit(Ant &Daughter, Ant &Mom, Ant &Dad, Params &Par)
+void Inherit(Ant &Daughter, Ant &Mom, Ant &Dad, Params &Par, gsl_rng *rng_r)
 {
     double rec = gsl_rng_uniform(rng_r);
 
@@ -654,29 +662,30 @@ void Inherit(Ant &Daughter, Ant &Mom, Ant &Dad, Params &Par)
         // dad transmits forget
         if (gsl_rng_uniform(rng_r) < 0.5)
         {
-            Mutation(Daughter.learn, Mom.learn, Par);
-            Mutation(Daughter.forget, Dad.forget, Par); 
+            Mutation(Daughter.learn, Mom.learn, Par, rng_r);
+            Mutation(Daughter.forget, Dad.forget, Par, rng_r); 
         }
         else // with prob 0.5 vice versa
         {
-            Mutation(Daughter.learn, Dad.learn, Par);
-            Mutation(Daughter.forget, Mom.forget, Par);
+            Mutation(Daughter.learn, Dad.learn, Par, rng_r);
+            Mutation(Daughter.forget, Mom.forget, Par, rng_r);
         }
     } 
     else  // no recombination
     {
         if (gsl_rng_uniform(rng_r) < 0.5)
         {
-            Mutation(Daughter.learn, Mom.learn, Par);
-            Mutation(Daughter.forget, Mom.forget, Par);
+            Mutation(Daughter.learn, Mom.learn, Par, rng_r);
+            Mutation(Daughter.forget, Mom.forget, Par, rng_r);
         }
         else 
         {
-            Mutation(Daughter.learn, Dad.learn, Par);
-            Mutation(Daughter.forget, Dad.forget, Par);
+            Mutation(Daughter.learn, Dad.learn, Par, rng_r);
+            Mutation(Daughter.forget, Dad.forget, Par, rng_r);
         }
     }
 
+    // values for learning and forgetting cannot be negative
     if (Daughter.learn < 0)
     {
         Daughter.learn = 0;
@@ -691,8 +700,13 @@ void Inherit(Ant &Daughter, Ant &Mom, Ant &Dad, Params &Par)
 
 //=======================================================================================
 
-// update efficiency levels (roughly according to 
-// eq. 4.1 in Duarte 2012 PhD Thesis)
+// update performance efficiency 
+// performance efficiency for task i is alpha_i
+// where
+// alpha_i = alpha_max * alpha_min * exp(K * eij) / (alpha_min * exp(K * eij) + 1-alpha_min)
+//
+// see Otto & Day ch 4 for specication of sigmoidal
+// K affects steepness of sigmoidal
 void UpdateEfficiency(Ant & anyAnt, Params & Par)
 {
     for (unsigned int task_i = 0; task_i < Par.tasks; ++task_i)
@@ -711,7 +725,7 @@ void UpdateEfficiency(Ant & anyAnt, Params & Par)
 
 
 // now initialize an ant
-void InitAnts(Ant & myAnt, Params & Par, Colony & myCol, int numID)
+void Init_Ants(Ant & myAnt, Params & Par, Colony & myCol, int numID, gsl_rng *rng_r)
 {
     myAnt.ID_ant = numID;
     myAnt.threshold.resize(Par.tasks);
@@ -726,7 +740,7 @@ void InitAnts(Ant & myAnt, Params & Par, Colony & myCol, int numID)
 
     if (Par.maxgen > 1)
     {
-        Inherit(myAnt, myCol.queen, myCol.male, Par);
+        Inherit(myAnt, myCol.queen, myCol.male, Par, rng_r);
     }
     else 
     {
@@ -761,10 +775,11 @@ void InitAnts(Ant & myAnt, Params & Par, Colony & myCol, int numID)
 
 //------------------------------------------------------------------------------------
 
-// initialize a colony
-void Init(Colony & Col, 
+// initialize a colony from sexuals
+void Init_Colony(Colony & Col, 
         unsigned int colony_number, 
-        Params & Par)
+        Params & Par,
+        gsl_rng *rng_r)
 {
     // resize the colony population to fit N individuals
     Col.MyAnts.resize(Par.N);
@@ -847,7 +862,7 @@ void Init(Colony & Col,
             ant_i < Col.MyAnts.size(); 
             ++ant_i)
     {
-        InitAnts(Col.MyAnts[ant_i], Par, Col, ant_i);
+        Init_Ants(Col.MyAnts[ant_i], Par, Col, ant_i, rng_r);
     }
 } // end of Init()
 //==================================================================================================================
@@ -917,12 +932,13 @@ void UpdateThresholds_And_Experience (Ant & anyAnt, Params & Par)
     }
 }   
 //========================================================================================================================
+
+// record task switch when
+// 1. ant is currently active
+// 2. last act wasn't inactivity
+// 3. last act was different from current act
 void UpdateSwitches(Ant & anyAnt, Params & Par)
 {
-    // record task switch when
-    // 1. ant is currently active
-    // 2. last act wasn't inactivity
-    // 3. last act was different from current act
     if (anyAnt.curr_act < int(Par.tasks) && 
             anyAnt.last_act != 7 && 
             anyAnt.last_act != anyAnt.curr_act)
@@ -934,7 +950,7 @@ void UpdateSwitches(Ant & anyAnt, Params & Par)
 //=========================================================================================================================
 
 // calculate whether ant is quitting a task
-void QuitTask(Colony & anyCol, Ant & anyAnt, int job, Params & Par)
+void QuitTask(Colony & anyCol, Ant & anyAnt, int job, Params & Par, gsl_rng *rng_r)
 {
 #ifdef DEBUG
     cout << "Quitting tasks" << endl;
@@ -994,7 +1010,9 @@ void DoTask ( Params Par, Colony & anyCol, Ant & anyAnt,int job)
 // she may also want to prefer no task yet
 void WantTask (Params Par, 
         Colony & anyCol, 
-        Ant & focalAnt)
+        Ant & focalAnt,
+        gsl_rng * rng_r
+        )
 {
     // make a list of all the task that this ants wants to do
     // and reserve space for it
@@ -1050,7 +1068,7 @@ void WantTask (Params Par,
 //-----------------------------------------------------------------------------
 
 // evaluate whether ant should switch tasks
-void EvalTaskSwitch(Params & Par, Colony & anyCol, Ant & anyAnt,int myjob)
+void EvalTaskSwitch(Params & Par, Colony & anyCol, Ant & anyAnt,int myjob, gsl_rng *rng_r)
 {
     // if it was doing this job previously 
     // or it did not do anything before
@@ -1082,7 +1100,8 @@ void EvalTaskSwitch(Params & Par, Colony & anyCol, Ant & anyAnt,int myjob)
 void TaskChoice(
         Params & Par, // parameter object
         Colony & anyCol, // current colony
-        Ant & focalAnt) // the ant in question
+        Ant & focalAnt,// the ant in question
+        gsl_rng *rng_r) 
 { 
 #ifdef DEBUG
 
@@ -1091,8 +1110,10 @@ void TaskChoice(
     bool wants_task = false;
     for (int task_i = 0; task_i < Par.tasks; ++task_i)
     {
+        // ants wants to perform task i
         if (focalAnt.want_task[task_i])
         {
+            // if it previously already did not already prefer a task
             if (!wants_task)
             {
                 wants_task = true;
@@ -1112,7 +1133,7 @@ void TaskChoice(
         // yes, ant wants to perform task so let's do it
         if (focalAnt.want_task[task_i])
         {
-            EvalTaskSwitch(Par, anyCol, focalAnt, task_i); 
+            EvalTaskSwitch(Par, anyCol, focalAnt, task_i, rng_r); 
             return;
         }
     }
@@ -1120,7 +1141,7 @@ void TaskChoice(
     // ant does not want to perform a task
 
     // make ant want task
-    WantTask(Par, anyCol, focalAnt);
+    WantTask(Par, anyCol, focalAnt, rng_r);
 
      // find out if ant now wants to perform a task
     for (unsigned int task_i = 0; task_i < Par.tasks; ++task_i)
@@ -1128,7 +1149,7 @@ void TaskChoice(
         // yes, ant wants to perform task so let's do it
         if (focalAnt.want_task[task_i])
         {
-            EvalTaskSwitch(Par, anyCol, focalAnt, task_i); 
+            EvalTaskSwitch(Par, anyCol, focalAnt, task_i, rng_r); 
             return;
         }
     }
@@ -1137,7 +1158,7 @@ void TaskChoice(
 
 // if ant is working, see whether it might quit
 // if ant is not working, see whether it might start a task
-void Update_Ants(Colony & Col, Params & Par)
+void Update_Ants(Colony & Col, Params & Par, gsl_rng *rng_r)
 {
     // go through all tasks and reset their stats to 0
     for (unsigned int task_i = 0; task_i < Par.tasks; ++task_i)
@@ -1159,7 +1180,7 @@ void Update_Ants(Colony & Col, Params & Par)
             Col.MyAnts[ant_i].last_act = Col.MyAnts[ant_i].curr_act; 
 
             // evaluate whether ant will quit task
-            QuitTask(Col, Col.MyAnts[ant_i], Col.MyAnts[ant_i].curr_act, Par); 
+            QuitTask(Col, Col.MyAnts[ant_i], Col.MyAnts[ant_i].curr_act, Par, rng_r); 
         }
 
         // ant currently inactive, let it choose a task
@@ -1167,7 +1188,7 @@ void Update_Ants(Colony & Col, Params & Par)
         // who quit in the previous statement)
         if (Col.MyAnts[ant_i].curr_act >= int(Par.tasks))
         {
-            TaskChoice(Par, Col, Col.MyAnts[ant_i]);
+            TaskChoice(Par, Col, Col.MyAnts[ant_i], rng_r);
         }
             
         //update number of switches after choosing tasks
@@ -1178,7 +1199,6 @@ void Update_Ants(Colony & Col, Params & Par)
 
         // update the ant's efficiency
         UpdateEfficiency(Col.MyAnts[ant_i], Par);
-
     } // end for Col.MyAnts.
           
 }  // end of Update_Ants()
@@ -1224,15 +1244,19 @@ void Update_Col_Data(
 
 } // end of UpdateColony_data
 //===================================================================================================
-void Update_Stim(Colony &Col, Params & Par)   // stimulus changes const increase
+//
+// update the stimulus levels
+void Update_Stim(Colony &Col, Params & Par)   
 {
-    for (unsigned int task=0; task<Par.tasks; task++)
+    for (unsigned int task = 0; task < Par.tasks; ++task)
     {
+
 #ifdef SIMULTANEOUS_UPDATE
         // update the stimulus for this task
         Col.newstim[task] = Col.stim[task] + Par.delta[task] - 
             (Par.beta[task]*Col.stim[task]) - (Col.workfor[task]/Par.N);
 #endif
+
 #ifndef SIMULTANEOUS_UPDATE
         Col.newstim[task] = Col.stim[task] + 
             Par.delta[task] - (Par.beta[task]*Col.stim[task]); 
@@ -1242,7 +1266,7 @@ void Update_Stim(Colony &Col, Params & Par)   // stimulus changes const increase
 
         if (Col.stim[task] < 0)
         {
-            Col.stim[task] =0;
+            Col.stim[task] = 0;
         }
     }
 } // end Update_Stim()
@@ -1388,6 +1412,9 @@ void Calc_Abs_Fitness(Colony & Col, Params & Par)
         // also average work allocation over all necessary timesteps
         Col.mean_work_alloc[task_i] /= Par.maxtime - Par.tau;
     }
+
+    // see eq. 4.2 in Duarte 2012
+    Col.fitness = sqrt(Col.fitness);
     
     Col.idle = 0;
 
@@ -1435,7 +1462,7 @@ void Make_Sexuals(Population & Pop, Params & Par)
     for (unsigned int sample_i = 0; sample_i < mySexuals.size(); ++sample_i)
     {
         // store random values of the cumulative distribution in the array
-        cumul_dist_samples[sample_i] = gsl_rng_uniform(rng_r) * sum_fitness;
+        cumul_dist_samples[sample_i] = gsl_rng_uniform(rng_global) * sum_fitness;
     }
 
     // now sort the list of random deviates
@@ -1471,7 +1498,8 @@ void Make_Sexuals(Population & Pop, Params & Par)
                 Inherit(mySexuals[new_sexual_ind], 
                         Pop[parentCol[col_i]].queen, 
                         Pop[parentCol[col_i]].male, 
-                        Par);
+                        Par,
+                        rng_global);
 
                 ++new_sexual_ind;
             }
@@ -1495,7 +1523,7 @@ void Make_Colonies(Population &Pop)
         assert(mySexuals.size() >= 2);
 
         // sample random mother
-        mother = gsl_rng_uniform_int(rng_r, mySexuals.size());
+        mother = gsl_rng_uniform_int(rng_global, mySexuals.size());
 
         // make this mother the queen of Colony col
         Pop[col].queen = mySexuals[mother];
@@ -1504,7 +1532,7 @@ void Make_Colonies(Population &Pop)
         mySexuals.erase(mySexuals.begin() + mother);
 
         // sample random father
-        father = gsl_rng_uniform_int(rng_r, mySexuals.size());
+        father = gsl_rng_uniform_int(rng_global, mySexuals.size());
 
         // make this father the male of Colony col
         Pop[col].male = mySexuals[father];
@@ -1788,8 +1816,12 @@ int main(int argc, char* argv[])
     // (from the gnu gsl library)
     gsl_rng_env_setup();
     T = gsl_rng_default;
-    rng_r = gsl_rng_alloc(T);
-    gsl_rng_set(rng_r, myPars.seed);
+    rng_global = gsl_rng_alloc(T);
+    gsl_rng_set(rng_global, myPars.seed);
+
+    // also set the seed for one call to random_shuffle
+    srand(myPars.seed);
+
 
     // initialize the founders of all the colonies
     Population MyColonies;
@@ -1872,46 +1904,67 @@ int main(int argc, char* argv[])
 
         // now go through all colonies and let them do work
         // for myPars.maxtime timesteps
-# pragma omp parallel num_threads(2)
+# pragma omp parallel num_threads(5)
         {
 # pragma omp for
+
             for (unsigned int col_i = 0; col_i < myPars.Col; ++col_i)
             {
+                // make a local copy of the colony to prevent 
+                // false sharing of MyColonies among threads
+                Colony Current_Colony = MyColonies[col_i];
+
+                // local parameter object
+                Params localParams = myPars;
+
+                // make a local random number generator
+                gsl_rng *rng_local = gsl_rng_alloc(T);
+    
+                gsl_rng_set(rng_local, localParams.seed);
+
                 // initialize each colony from sexuals
-                Init(MyColonies[col_i], col_i, myPars);
+                Init_Colony(Current_Colony, col_i, localParams, rng_local);
 
                 // timesteps during colony development
-                for (int k = 0; k < myPars.maxtime; ++k)
+                for (int k = 0; k < localParams.maxtime; ++k)
                 {
                     // update all the stimuli of the ants 
                     // and what they are doing
-                    Update_Ants(MyColonies[col_i], myPars);
+                    Update_Ants(Current_Colony, localParams, rng_local);
 
                     // calculate specialization values
-                    Calc_D(MyColonies[col_i], myPars); 
+                    Calc_D(Current_Colony, localParams); 
 
                     // update statistics and if beyond tau, fitness values
-                    Update_Col_Data(k, MyColonies[col_i], myPars);	
+                    Update_Col_Data(k, Current_Colony, localParams);	
 
                     // calculate at the end of the timestep: 
                     // the ants have done something
                     // which has consequences for stimulus levels, 
                     // which you update here
-                    Update_Stim(MyColonies[col_i], myPars);
+                    Update_Stim(Current_Colony, localParams);
                 }
 
                 // calculate absolute fitness of this population
                 // in the last timestep
-                Calc_Abs_Fitness(MyColonies[col_i], myPars);
+                Calc_Abs_Fitness(Current_Colony, localParams);
+
+                // return the current colony to the stack
+                MyColonies[col_i] = Current_Colony;
             }
         }
 
         double stop_time = omp_get_wtime();
 
         cout << "time: " << (stop_time - start_time) << endl;
+        
+        start_time = omp_get_wtime();
 
         // calculate relative fitness values
         Calc_Rel_Fitness(MyColonies, myPars);
+        
+        stop_time = omp_get_wtime();
+        cout << "time produce sexuals: " << (stop_time - start_time) << endl;
 
         // now calculate relative fitness 
         // write stats and let colonies reproduce
@@ -1961,5 +2014,6 @@ int main(int argc, char* argv[])
             
             Make_Colonies(MyColonies);
         }
+        
     } // end for generations
 }

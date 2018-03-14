@@ -1,6 +1,6 @@
-100;N
-1000;Col
-3000;maxtime
+50;N
+50;Col
+300;maxtime
 10.0;meanT1
 10.0;meanT2
 1.0;delta1
@@ -21,7 +21,7 @@
 0.1;mutstep
 0.3;initStim
 0.1;p_wait
-1500;tau
+0;tau
 0.1;initForget
 0.1;initLearn
 0.2;step_gain_exp

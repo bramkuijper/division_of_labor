@@ -2,7 +2,6 @@ all : xreinforcedRT xreadhisto
 
 xreinforcedRT : reinforcedRT_ExpEnhPerf_stepsize.cpp
 	g++ -Wall -O3 -o xreinforcedRT reinforcedRT_ExpEnhPerf_stepsize.cpp -fopenmp -lgsl -lgslcblas 
-
 xreadhisto : read_histograms.cpp
 	g++ -Wall -ggdb -O3 -o xreadhisto read_histograms.cpp -lm -lrt -lgsl -lgslcblas
 
