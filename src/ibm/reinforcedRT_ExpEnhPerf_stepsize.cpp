@@ -29,6 +29,7 @@
 #include <gsl/gsl_randist.h>
 #include <cstring>
 #include <termios.h>
+#include <omp.h>
 #include <unistd.h>
 #include <sys/stat.h>
 
@@ -72,11 +73,11 @@ struct Params
 
     vector<double> meanT; // mean threshold 
     vector<double> delta; // rate of increase in stimulus 
-    vector<double> alfa_max; // maximum efficiency with which work is done (when fully experienced)
-    vector<double>alfa_min; // minimum efficiency with which work is done (when inexperied)
+    vector<double> alpha_max; // maximum efficiency with which work is done (when fully experienced)
+    vector<double>alpha_min; // minimum efficiency with which work is done (when inexperied)
     vector<double> beta;
     
-    istream & InitParams(istream & inp);
+    istream & Init_Params(istream & inp);
 };
 
 struct Ant
@@ -86,7 +87,7 @@ struct Ant
     double forget;
     // behaviour
     vector < double > threshold;
-    vector < double > alfa; // Strenght with which experience level affects efficiency
+    vector < double > alpha; // Strenght with which experience level affects efficiency
     vector < int > countacts;   // counter of acts done by this ant
     vector < bool > want_task; // whether an individual would accept an offered task (does not mean it will do the task)
     vector < double > experience_points; // e_ij in Duarte 2012 chapter 5
@@ -174,13 +175,13 @@ int mygetch(void)
 
 // initialize the parameters from a textfile file in the local folder
 // which is all generated through python
-istream & Params::InitParams(istream & in)
+istream & Params::Init_Params(istream & in)
 {
     tasks = 2; 
     meanT.reserve(tasks);
     delta.reserve(tasks);
-    alfa_max.reserve(tasks);
-    alfa_min.reserve(tasks);
+    alpha_max.reserve(tasks);
+    alpha_min.reserve(tasks);
     beta.reserve(tasks);
 
     // read in parameter values from the input stream (file)
@@ -190,7 +191,7 @@ istream & Params::InitParams(istream & in)
     getline(in, tmp, ';'); 
     N = stoi(tmp);
 
-    // skip the remainder
+    // skip the remainder after the semicolon in params.txt
     getline(in, tmp); 
     tmp="";
 
@@ -198,7 +199,7 @@ istream & Params::InitParams(istream & in)
     getline(in, tmp, ';'); 
     Col = stoi(tmp);
     
-    // skip the remainder
+    // skip the remainder after the semicolon in params.txt
     getline(in, tmp); 
     tmp="";
 
@@ -206,74 +207,219 @@ istream & Params::InitParams(istream & in)
     getline(in, tmp, ';'); 
     maxtime = stoi(tmp);
     
-    // skip the remainder
+    // skip the remainder after the semicolon
     getline(in, tmp); 
     tmp="";
-
-    cout << N << ";" << Col << ";" << maxtime << ";" << endl;
-
-    exit(1);
-
-    in >> 
-        Col >> // number of colonies
-        maxtime;  // number of timesteps work is performed before reproduction
-   
-    double tmpdbl;
 
     // get initial threshold values for each task
     for (unsigned int i = 0; i < tasks; ++i) 
     {
-        in >> tmpdbl; 
-        meanT.push_back(tmpdbl);
+        getline(in, tmp, ';'); 
+        meanT.push_back(stof(tmp));
+    
+        // skip the remainder
+        getline(in, tmp); 
+        tmp="";
     }
 
     // get increase in stimulus intensity for each task
     for (unsigned int i = 0; i < tasks; ++i) 
     {    
-        in >> tmpdbl; 
-        delta.push_back(tmpdbl);
+        getline(in, tmp, ';'); 
+        delta.push_back(stof(tmp));
+    
+        // skip the remainder
+        getline(in, tmp); 
+        tmp="";
     }
 
     // get maximum efficiency of work for each task
     for (unsigned int i = 0; i < tasks; ++i)
     {
-        in >> tmpdbl; 
-        alfa_max.push_back(tmpdbl);
+        getline(in, tmp, ';'); 
+        alpha_max.push_back(stof(tmp));
+    
+        // skip the remainder
+        getline(in, tmp); 
+        tmp="";
     }
 
     // get minimum efficiency of work for each task
     for (unsigned int i = 0; i < tasks; ++i)
     {
-        in >> tmpdbl; 
-        alfa_min.push_back(tmpdbl);
+        getline(in, tmp, ';'); 
+        alpha_min.push_back(stof(tmp));
+    
+        // skip the remainder
+        getline(in, tmp); 
+        tmp="";
     }
 
     // get stimulus decay for each task
     for (unsigned int i = 0; i < tasks; ++i) 
     {
-        in >> tmpdbl;
-        beta.push_back(tmpdbl);
+        getline(in, tmp, ';'); 
+        beta.push_back(stof(tmp));
+    
+        // skip the remainder
+        getline(in, tmp); 
+        tmp="";
     }
 
-    in >> p >> // quitting probability
-        mutp >> // mutation probability
-        maxgen >> // get maximum number of generations
-        beta_fit >> // exponent of the first task in fitness function
-        gamma_fit >> // exponent of the second task in fitness function
-        recomb >> // recombination rate
-        timecost>> // switching cost dependent on the time the task is performed
-        mutstep >> // standard deviation of mutational distribution
-        initStim >> // initial level of the stimulus
-        p_wait >> // probability that ant has to wait c time steps before switching
-        tau >> // timestep from which fitness is counted
-        initForget >>
-        initLearn >>
-        step_gain_exp >>
-        step_lose_exp >>
-        threshold_noise >>
-        K >>
-        seed;
-         
+    // obtain the quitting probability p
+    getline(in, tmp, ';'); 
+    p = stof(tmp);
+
+    // skip the remainder
+    getline(in, tmp); 
+    tmp="";
+
+
+    // obtain the mutation rate
+    getline(in, tmp, ';'); 
+    mutp = stof(tmp);
+
+    // skip the remainder
+    getline(in, tmp); 
+    tmp="";
+
+    // obtain the maximum number of generations
+    getline(in, tmp, ';'); 
+    maxgen = stoi(tmp);
+
+    // skip the remainder
+    getline(in, tmp); 
+    tmp="";
+
+
+    // obtain the exponent of the first task in the fitness function
+    getline(in, tmp, ';'); 
+    beta_fit = stof(tmp);
+
+    // skip the remainder
+    getline(in, tmp); 
+    tmp="";
+
+
+    // obtain the exponent of the second task in the fitness function
+    getline(in, tmp, ';'); 
+    gamma_fit = stof(tmp);
+
+    // skip the remainder
+    getline(in, tmp); 
+    tmp="";
+   
+
+    // obtain the recombination rate
+    getline(in, tmp, ';'); 
+    recomb = stof(tmp);
+
+    // skip the remainder
+    getline(in, tmp); 
+    tmp="";
+   
+
+    // obtain the timecost
+    getline(in, tmp, ';'); 
+    timecost = stoi(tmp);
+
+    // skip the remainder
+    getline(in, tmp); 
+    tmp="";
+
+
+    // obtain the mutational step size
+    getline(in, tmp, ';'); 
+    mutstep = stof(tmp);
+
+    // skip the remainder
+    getline(in, tmp); 
+    tmp="";
+
+
+    // obtain the initial level of the stimulus
+    getline(in, tmp, ';'); 
+    initStim = stof(tmp);
+
+    // skip the remainder
+    getline(in, tmp); 
+    tmp="";
+
+
+    // obtain the probability that ant has to 
+    // wait c time steps before switching
+    getline(in, tmp, ';'); 
+    p_wait = stof(tmp);
+
+    // skip the remainder
+    getline(in, tmp); 
+    tmp="";
+    
+    
+    // obtain timestep from which fitness is counted
+    getline(in, tmp, ';'); 
+    tau = stoi(tmp);
+
+    // skip the remainder
+    getline(in, tmp); 
+    tmp="";
+    
+    
+    getline(in, tmp, ';'); 
+    initForget = stof(tmp);
+
+    // skip the remainder
+    getline(in, tmp); 
+    tmp="";
+    
+    
+    getline(in, tmp, ';'); 
+    initLearn = stof(tmp);
+
+    // skip the remainder
+    getline(in, tmp); 
+    tmp="";
+    
+    
+    getline(in, tmp, ';'); 
+    step_gain_exp = stof(tmp);
+
+    // skip the remainder
+    getline(in, tmp); 
+    tmp="";
+    
+    
+    getline(in, tmp, ';'); 
+    step_lose_exp = stof(tmp);
+
+    // skip the remainder
+    getline(in, tmp); 
+    tmp="";
+
+
+    getline(in, tmp, ';'); 
+    threshold_noise = stof(tmp);
+
+    // skip the remainder
+    getline(in, tmp); 
+    tmp="";
+
+    
+    getline(in, tmp, ';'); 
+    K = stof(tmp);
+
+    // skip the remainder
+    getline(in, tmp); 
+    tmp="";
+
+    
+    getline(in, tmp, ';'); 
+    seed = stoi(tmp);
+
+    // skip the remainder
+    getline(in, tmp); 
+    tmp="";
+
     return in;
 }
 
@@ -389,7 +535,7 @@ void Show_Ants(Colony & anyCol)
         cout << "\t" << endl;
 	    cout << "count acts " << anyCol.MyAnts[ant].countacts[0] << "\t" << anyCol.MyAnts[ant].countacts[1]  << endl;
         cout << "thresholds " << anyCol.MyAnts[ant].threshold[0] << "\t" << anyCol.MyAnts[ant].threshold[1] << endl;
-        cout << "effic " << anyCol.MyAnts[ant].alfa[0] << "\t" << anyCol.MyAnts[ant].alfa[1] << endl;
+        cout << "effic " << anyCol.MyAnts[ant].alpha[0] << "\t" << anyCol.MyAnts[ant].alpha[1] << endl;
 	    cout << "D " << anyCol.MyAnts[ant].D << endl; // specialization value
 	    cout << "switches " << anyCol.MyAnts[ant].switches << endl;
 	    cout << "workperiods " << anyCol.MyAnts[ant].workperiods << endl;
@@ -416,12 +562,12 @@ void Show_Params(Params & Par)
 
     for (unsigned int task=0; task<Par.tasks; ++task)
     {
-        cout << "max effic " << task << "\t" << Par.alfa_max[task] << endl;
+        cout << "max effic " << task << "\t" << Par.alpha_max[task] << endl;
     }
 
     for (unsigned int task=0; task<Par.tasks; ++task)
     {
-        cout << "min effic " << task << "\t" << Par.alfa_min[task] << endl;
+        cout << "min effic " << task << "\t" << Par.alpha_min[task] << endl;
     }
 
     for (unsigned int task=0; task<Par.tasks; ++task)
@@ -442,11 +588,12 @@ void Show_Params(Params & Par)
     cout << "tau " << Par.tau << endl;
     cout << "initial Stimulus " << Par.initStim << endl;
     cout << "p_wait " << Par.p_wait << endl;
+    cout << "threshold noise " << Par.threshold_noise << endl;
     cout << "initial Learn " << Par.initLearn << endl;
     cout << "initial Forget " << Par.initForget << endl;
     cout << "stepsize gain exp " << Par.step_gain_exp << endl;
     cout << "stepsize to lose exp " << Par.step_lose_exp << endl;
-    cout << "K" << Par.K << endl;
+    cout << "K " << Par.K << endl;
 }
 //========================================================================================
 // Function to initialize founders at generation 0
@@ -551,10 +698,10 @@ void UpdateEfficiency(Ant & anyAnt, Params & Par)
     for (unsigned int task_i = 0; task_i < Par.tasks; ++task_i)
     {
         double tmp_1 = Par.K * anyAnt.experience_points[task_i];
-        double tmp_2 = Par.alfa_min[task_i] * exp(tmp_1);
+        double tmp_2 = Par.alpha_min[task_i] * exp(tmp_1);
 
-        anyAnt.alfa[task_i] = Par.alfa_max[task_i] * tmp_2 / 
-            (tmp_2 + (1 - Par.alfa_min[task_i])); 
+        anyAnt.alpha[task_i] = Par.alpha_max[task_i] * tmp_2 / 
+            (tmp_2 + (1 - Par.alpha_min[task_i])); 
     }
 
 }
@@ -568,7 +715,7 @@ void InitAnts(Ant & myAnt, Params & Par, Colony & myCol, int numID)
 {
     myAnt.ID_ant = numID;
     myAnt.threshold.resize(Par.tasks);
-    myAnt.alfa.resize(Par.tasks);
+    myAnt.alpha.resize(Par.tasks);
     myAnt.experience_points.resize(Par.tasks);
 
     for (unsigned int task=0; task<Par.tasks; task++)
@@ -719,11 +866,11 @@ void UpdateStimPerAnt(Params & Par, Colony & anyCol, Ant & anyAnt, int task)
     // increment total amount of work being done in the colony
     // by adding an alpha_i * 1 (here 1 is the new worker who works on
     // task 'task'.
-    anyCol.workfor[task] += anyAnt.alfa[task];    
+    anyCol.workfor[task] += anyAnt.alpha[task];    
 
     // update the stimulus accordingly (e.g., see eq. (3) in 
     // Bonabeau et al 1996
-    anyCol.stim[task] -= (anyAnt.alfa[task]/Par.N); 
+    anyCol.stim[task] -= (anyAnt.alpha[task]/Par.N); 
        
     // set boundary of the stimulus at 0
     if(anyCol.stim[task] < 0)
@@ -1599,8 +1746,8 @@ void Write_Ants_Beh(Colony & Col,
             << Col.MyAnts[ant].countacts[1] << ";"
             << Col.MyAnts[ant].experience_points[0] << ";"
             << Col.MyAnts[ant].experience_points[1] << ";"
-            << Col.MyAnts[ant].alfa[0] << ";"
-            << Col.MyAnts[ant].alfa[1] << ";" 
+            << Col.MyAnts[ant].alpha[0] << ";"
+            << Col.MyAnts[ant].alpha[1] << ";" 
             << Col.MyAnts[ant].switches << ";"
             << Col.MyAnts[ant].workperiods << endl;  
     }
@@ -1620,8 +1767,8 @@ void Write_Ants_Thresholds(Population & Pop, ofstream & mydata, int timestep, in
                 << Pop[col].MyAnts[ant].countacts[1] << ";"
                 << Pop[col].MyAnts[ant].experience_points[0] << ";"
                 << Pop[col].MyAnts[ant].experience_points[1] << ";"
-                << Pop[col].MyAnts[ant].alfa[0] << ";"
-                << Pop[col].MyAnts[ant].alfa[1] << endl; 
+                << Pop[col].MyAnts[ant].alpha[0] << ";"
+                << Pop[col].MyAnts[ant].alpha[1] << endl; 
         }
     }
 }
@@ -1635,7 +1782,7 @@ int main(int argc, char* argv[])
     ifstream inp("params.txt");
 
     // add these parameters to parameter object
-    myPars.InitParams(inp);
+    myPars.Init_Params(inp);
 
     // set up the random number generators
     // (from the gnu gsl library)
@@ -1721,10 +1868,12 @@ int main(int argc, char* argv[])
     {
         cout << "generation: " << current_generation << " end " << endl;
 
+        double start_time = omp_get_wtime();
+
         // now go through all colonies and let them do work
         // for myPars.maxtime timesteps
 # pragma omp parallel num_threads(2)
-      {
+        {
 # pragma omp for
             for (unsigned int col_i = 0; col_i < myPars.Col; ++col_i)
             {
@@ -1755,8 +1904,12 @@ int main(int argc, char* argv[])
                 // in the last timestep
                 Calc_Abs_Fitness(MyColonies[col_i], myPars);
             }
-       }
-            
+        }
+
+        double stop_time = omp_get_wtime();
+
+        cout << "time: " << (stop_time - start_time) << endl;
+
         // calculate relative fitness values
         Calc_Rel_Fitness(MyColonies, myPars);
 
