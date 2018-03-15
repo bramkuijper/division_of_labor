@@ -7,6 +7,8 @@ import itertools
 import argparse
 import numpy as np
 import sys
+from pathlib import Path
+from pathlib import PurePath
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import axes3d
 from matplotlib import rcParams
@@ -46,7 +48,22 @@ histo_exe = ""
 
 # first set up argument parser object
 # so that we can pass some command line flags to the python script
-parser = argparse.ArgumentParser(:
+parser = argparse.ArgumentParser(description="Plot simulation result.")
+
+parser.add_argument('--hist', 
+        dest='use_histogram', 
+        action='store_const',
+        const=True,
+        default=False)
+
+# ok parse the command line arguments
+args = parser.parse_args()
+
+use_hist = vars(args)["use_histogram"]
+
+
+
+
 
 
 # get work allocation data
@@ -67,73 +84,76 @@ work_alloc_data = pd.read_csv("data_work_alloc_1.txt",
         index_col=False,
         names=header) # feed the header to the csv file
 
-work_alloc_data.to_csv(path_or_buf="wd.csv",
-        sep=";",
-        index=False)
+# ok we need to plot histograms of the allelic values
+# hence we need to process the allelic values data
+if use_hist:
+    # perform a system call to generate histogram from the allele frequency data
+    # https://stackoverflow.com/questions/3718657/how-to-properly-determine-current-script-directory 
+    script_dir = PurePath(Path(__file__).resolve())
 
-print("read work alloc data")
+    # generate file name of the histogram read executable
+    histo_exe = Path(script_dir.parent / "xreadhisto")
 
-print(work_alloc_data.describe())
+    assert(histo_exe.exists())
 
-# perform a system call to generate histogram from the allele frequency data
-
-
-
-
-# get data on branching for learning and forgetting
-# this is a histogram with all sorts of values
-branch_data = pd.read_csv(
-        filepath_or_buffer=sys.argv[1], 
-        sep=";", 
-        header=None, # no header
-        index_col=False,
-        names=["minbin","maxbin","generation","trait","count"] # hence provide header names
-        )
-
-print("read branch data")
-
-def the_pow(x):
-    return(x**(0.25))
-
-branch_data["count"] = branch_data["count"].apply(the_pow)
-
-# generate the pivot table that is necessary to plot it in imshow()
-def generate_pivot(the_data, x, y, z):
-
-    # make a pivot table
-    the_pivot = the_data.pivot_table(
-            values=z, 
-            index=y, 
-            columns=x)
-
-    x, y = np.meshgrid(
-            the_pivot.columns.values, 
-            the_pivot.index.values)
-
-    z = the_pivot.values
-
-    return(x, y, z)
+    subprocess.call([str(histo_exe),"allele_distrib_1.txt"])
 
 
-# generate a pivot table for learning
-(x_learn, y_learn, learn_count) = generate_pivot(
-        the_data = branch_data[branch_data["trait"]=="learn"], 
-        x="generation",
-        y="minbin",
-        z="count"
-        )
+    # get data on branching for learning and forgetting
+    # this is a histogram with all sorts of values
+    branch_data = pd.read_csv(
+            filepath_or_buffer=sys.argv[1], 
+            sep=";", 
+            header=None, # no header
+            index_col=False,
+            names=["minbin","maxbin","generation","trait","count"] # hence provide header names
+            )
 
-print("pivot 1")
+    print("read branch data")
 
-# generate a pivot table for forgetting
-(x_forget, y_forget, forget_count) = generate_pivot(
-        the_data = branch_data[branch_data["trait"]=="forget"], 
-        x="generation",
-        y="minbin",
-        z="count"
-        )
+    # now 4th root transform the data, so that also see rare frequencies
+    def the_pow(x):
+        return(x**(0.25))
 
-print("pivot 2")
+    branch_data["count"] = branch_data["count"].apply(the_pow)
+
+    # generate the pivot table that is necessary to plot it in imshow()
+    def generate_pivot(the_data, x, y, z):
+
+        # make a pivot table
+        the_pivot = the_data.pivot_table(
+                values=z, 
+                index=y, 
+                columns=x)
+
+        x, y = np.meshgrid(
+                the_pivot.columns.values, 
+                the_pivot.index.values)
+
+        z = the_pivot.values
+
+        return(x, y, z)
+
+
+    # generate a pivot table for learning
+    (x_learn, y_learn, learn_count) = generate_pivot(
+            the_data = branch_data[branch_data["trait"]=="learn"], 
+            x="generation",
+            y="minbin",
+            z="count"
+            )
+
+    print("pivot 1")
+
+    # generate a pivot table for forgetting
+    (x_forget, y_forget, forget_count) = generate_pivot(
+            the_data = branch_data[branch_data["trait"]=="forget"], 
+            x="generation",
+            y="minbin",
+            z="count"
+            )
+
+    print("pivot 2")
 
 #########################################
 
@@ -159,34 +179,35 @@ gs = gridspec.GridSpec(
         width_ratios=widths,
         height_ratios=heights)
 
-ax = plt.subplot(gs[0,0])
+if use_hist:
+    ax = plt.subplot(gs[0,0])
 
-## the plot for learning
-#ax.imshow(learn_count,
-#    cmap="jet",
-#    extent=[x_learn.min(), 
-#        x_learn.max(), 
-#        y_learn.min(), 
-#        y_learn.max()],
-#    origin="lower",
-#    aspect="auto")
-#
-#ax.set_ylabel(r"Learning")
-#
-## start next entry of the graph
-#ax = plt.subplot(gs[1,0])
-#
-## the plot for learning
-#ax.imshow(forget_count,
-#    cmap="jet",
-#    extent=[x_forget.min(), 
-#        x_forget.max(), 
-#        y_forget.min(), 
-#        y_forget.max()],
-#    origin="lower",
-#    aspect="auto")
-#
-#ax.set_ylabel(r"Forgetting")
+    # the plot for learning
+    ax.imshow(learn_count,
+        cmap="jet",
+        extent=[x_learn.min(), 
+            x_learn.max(), 
+            y_learn.min(), 
+            y_learn.max()],
+        origin="lower",
+        aspect="auto")
+
+    ax.set_ylabel(r"Learning")
+
+    # start next entry of the graph
+    ax = plt.subplot(gs[1,0])
+
+    # the plot for learning
+    ax.imshow(forget_count,
+        cmap="jet",
+        extent=[x_forget.min(), 
+            x_forget.max(), 
+            y_forget.min(), 
+            y_forget.max()],
+        origin="lower",
+        aspect="auto")
+
+    ax.set_ylabel(r"Forgetting")
 
 
 # start next entry of the graph
@@ -194,10 +215,18 @@ ax = plt.subplot(gs[0,0])
 ax = plt.subplot(gs[2,0])
 
 
-data_agg = data.groupby(["Gen"].agg(["min","max","np.mean","np.std"]))
-data_agg.columns = data_agg.columns.droplevel(0)
+work_alloc_data_agg = work_alloc_data.groupby("Gen").agg(['min','max','mean','std','median'])
 
-print(data_agg.describe())
+# see https://stackoverflow.com/questions/41809118/get-columns-from-multiindex-dataframe-with-named-labels 
+work_alloc_data_agg = work_alloc_data_agg.sort_index(axis=1)
+idx = pd.IndexSlice
+print(work_alloc_data_agg.loc[:, idx["FitWork1",["mean"]]])
+
+work_alloc_data_agg.columns = work_alloc_data_agg.columns.droplevel(0)
+
+print(work_alloc_data_agg.columns.describe())
+
+sys.exit(1)
 
 
 ax.plot(
