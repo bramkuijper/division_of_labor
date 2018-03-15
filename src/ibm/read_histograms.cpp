@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <cstdio>
 #include <cassert>
+#include <vector>
 #include "auxiliary.h"
 #include <gsl/gsl_histogram.h>
 
@@ -17,12 +18,44 @@ using namespace std;
 
 const size_t number_columns = 2;
 
+template <class Container>
+
+// function to split filenames into folders
+void split_folders(const std::string& str, Container &cont, char delim='/')
+{
+    stringstream ss(str);
+    string token;
+
+    // ok, split the string according to the delimiter
+    while (getline(ss, token, delim))
+    {
+            cont.push_back(token);
+    }
+}
+
+
 // opens the file with all the values
 void initFile(
         int argc, 
         char **argv, 
-        ifstream &file)
+        ifstream &file, 
+        string &base_path)
 {
+    // first get the path name of the file
+    string filename(argv[1]);
+
+    // then split the path name into all folders, apart from the last
+    vector <string> folders;
+    split_folders(filename, folders, '/');
+
+    // now iterate over folders to get everything but the last 
+    base_path = "";
+
+    for (int i = 0; i < folders.size() - 1; ++i)
+    {
+        base_path += folders[i] + "/";
+    }
+
     file.open(argv[1]);
 }
 
@@ -183,14 +216,15 @@ void fillHistograms(
         double * min, 
         ifstream &file, 
         unsigned long file_begin,
-        string &file_header
+        string &file_header,
+        string &hist_file_name
         )
 {
     gsl_histogram * histograms[number_columns];
 
     FILE *myfile;
     
-    if ( ! (myfile = fopen("histograms","w")))
+    if ( ! (myfile = fopen(hist_file_name.c_str(),"w")))
     {
         cout << "cannot open histograms for writing!" << endl;
         exit(1);
@@ -267,8 +301,12 @@ int main(int argc, char **argv)
 {
     ifstream file;
 
+    string base_path;
+
     // open the file
-    initFile(argc, argv, file);
+    initFile(argc, argv, file, base_path);
+    
+    base_path += "histograms.csv";
 
     // minima and maxima of each column
     double max[number_columns];
@@ -285,5 +323,5 @@ int main(int argc, char **argv)
 
     cout << file_begin << endl;
 
-    fillHistograms(max, min, file, file_begin, file_header);
+    fillHistograms(max, min, file, file_begin, file_header, base_path);
 }

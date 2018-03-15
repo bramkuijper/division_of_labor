@@ -4,6 +4,7 @@
 
 import pandas as pd
 import itertools
+import subprocess 
 import argparse
 import numpy as np
 import sys
@@ -35,10 +36,22 @@ rcParams['text.latex.preamble'] = [
 ]
 
 
-# directory in which we can find the executable
-# xreadhisto
-histo_exe = ""
+# basename of the executable that makes histgrams out of the allele frequency
+# data. Such histograms are necessary for plotting things
+histo_exe_basename = "xreadhisto"
 
+# the basename of the resulting histogram file
+histogram_basename = "histograms.csv"
+
+# filename of the work allocation file
+work_file_basename = "data_work_alloc_1.txt"
+
+# filename of the corresponding header file
+work_file_header = "header_1.txt"
+
+# the file with the allelic distributions (we need to make a histogram
+# of this) 
+allele_file_basename = "allele_distrib_1.txt"
 
 #########################################
 
@@ -50,6 +63,13 @@ histo_exe = ""
 # so that we can pass some command line flags to the python script
 parser = argparse.ArgumentParser(description="Plot simulation result.")
 
+# add the data_work_alloc file as an obligatory argument
+parser.add_argument('filename', 
+        metavar="dir",
+        type=str,
+        nargs=1,
+        help="a filename of the " + work_file_basename + " file")
+
 parser.add_argument('--hist', 
         dest='use_histogram', 
         action='store_const',
@@ -58,17 +78,20 @@ parser.add_argument('--hist',
 
 # ok parse the command line arguments
 args = parser.parse_args()
+# the filename where data_work_alloc_1.txt is to be found
+work_alloc_file = Path(vars(args)["filename"][0]).resolve()
 
+# also store the absolute base folder in which the data_work_alloc_1.txt is contained
+base_folder = work_alloc_file.parent
+
+# whether we need to produe the histograms showing branching in the 
+# different trait values
 use_hist = vars(args)["use_histogram"]
-
-
-
-
 
 
 # get work allocation data
 # first read in the corresponding header file
-f = open("header_1.txt")
+f = open(base_folder / work_file_header)
 fl = f.readlines()
 f.close()
 
@@ -78,7 +101,7 @@ f.close()
 header = fl[0].strip().split("\t")
 
 # get the work allocation data and plot it
-work_alloc_data = pd.read_csv("data_work_alloc_1.txt",
+work_alloc_data = pd.read_csv(work_alloc_file,
         sep="\t",
         header=None,
         index_col=False,
@@ -91,18 +114,36 @@ if use_hist:
     # https://stackoverflow.com/questions/3718657/how-to-properly-determine-current-script-directory 
     script_dir = PurePath(Path(__file__).resolve())
 
-    # generate file name of the histogram read executable
-    histo_exe = Path(script_dir.parent / "xreadhisto")
+    # generate file name of the histogram generator executable
+    histo_exe = Path(script_dir.parent / histo_exe_basename)
 
+    # see whether the exe is indeed there
     assert(histo_exe.exists())
 
-    subprocess.call([str(histo_exe),"allele_distrib_1.txt"])
+    # also check if the histo name is already existing, in which case
+    # we do not have to run the thingy again
+    result_histo_name = base_folder / histogram_basename
+
+    if (not result_histo_name.exists()):
+
+        # then create the filename of the allele_distrib_1.txt containing
+        # all the allelic values
+        allele_dist_file = base_folder / allele_file_basename
+
+        assert(allele_dist_file.exists())
+
+        # call the histogram creation executable and let it work on the file
+        subprocess.call([str(histo_exe), str(allele_dist_file)])
+
+
+        # see whether the histograms.csv file is produced
+        assert(result_histo_name.exists())
 
 
     # get data on branching for learning and forgetting
     # this is a histogram with all sorts of values
     branch_data = pd.read_csv(
-            filepath_or_buffer=sys.argv[1], 
+            filepath_or_buffer=result_histo_name, 
             sep=";", 
             header=None, # no header
             index_col=False,
@@ -162,7 +203,7 @@ if use_hist:
 #########################################
 
 # initialize the figure
-fig = plt.figure(figsize=(10,14))
+fig = plt.figure(figsize=(10,18))
 
 # generate the grid of the graph
 # see: 
@@ -220,48 +261,73 @@ work_alloc_data_agg = work_alloc_data.groupby("Gen").agg(['min','max','mean','st
 # see https://stackoverflow.com/questions/41809118/get-columns-from-multiindex-dataframe-with-named-labels 
 work_alloc_data_agg = work_alloc_data_agg.sort_index(axis=1)
 idx = pd.IndexSlice
-print(work_alloc_data_agg.loc[:, idx["FitWork1",["mean"]]])
+print(len(list(work_alloc_data_agg.index.get_level_values("Gen"))))
+print(work_alloc_data.head())
+print(work_alloc_data_agg.head())
 
-work_alloc_data_agg.columns = work_alloc_data_agg.columns.droplevel(0)
 
-print(work_alloc_data_agg.columns.describe())
+# calculate confidence envelopes (mean + sd)
+min_sd_w1 = work_alloc_data_agg.loc[:, idx["FitWork1",["mean"]]].sub(work_alloc_data_agg.loc[:, idx["FitWork1",["std"]]].values,1)
 
-sys.exit(1)
+max_sd_w1 = work_alloc_data_agg.loc[:, idx["FitWork1",["mean"]]].add(work_alloc_data_agg.loc[:, idx["FitWork1",["std"]]].values,1)
 
+min_sd_w2 = work_alloc_data_agg.loc[:, idx["FitWork2",["mean"]]].sub(work_alloc_data_agg.loc[:, idx["FitWork2",["std"]]].values,1)
+
+max_sd_w2 = work_alloc_data_agg.loc[:, idx["FitWork2",["mean"]]].add(work_alloc_data_agg.loc[:, idx["FitWork2",["std"]]].values,1)
+
+
+lightred = "#ffa9ad"
+
+# now plot the values
+ax.plot(
+        work_alloc_data_agg.loc[:, idx["FitWork1",["mean"]]],
+        color="blue",
+        label=r"$\bar{w}_{1}$")
 
 ax.plot(
-        data_agg["Gen"],
-        data_agg["FitWork1"],
-        marker=".",
-        markerfacecolor="blue",
-        markeredgecolor="blue")
+        min_sd_w1,
+        color="lightblue",
+        label="_nolegend_")
 
 ax.plot(
-        work_alloc_data["Gen"],
-        work_alloc_data["FitWork2"],
-        marker=".",
-        markerfacecolor="red",
-        markeredgecolor="red")
+        max_sd_w1,
+        color="lightblue",
+        label="_nolegend_")
+
+ax.plot(
+        work_alloc_data_agg.loc[:, idx["FitWork2",["mean"]]],
+        color="red",
+        label=r"$\bar{w}_{2}$")
+
+ax.plot(
+        min_sd_w2,
+        color=lightred,
+        label="_nolegend_")
+
+ax.plot(
+        max_sd_w2,
+        color=lightred,
+        label="_nolegend_")
 
 # add a legend
-ax.legend(
-        (r'$w_{1}$',
-            r'$w_{2}$'))
+ax.legend()
 
-ax.set_ylabel(r"Fitwork")
+ax.set_ylabel(r"Fitness")
 
+ax.tick_params(
+        axis="x",
+        which="both",
+        labelbottom=False)
 
 # start next entry of the graph
 ax = plt.subplot(gs[3,0])
 
 ax.plot(
-        x=work_alloc_data["Gen"],
-        y=work_alloc_data["WorkAlloc1"],
+        work_alloc_data_agg.loc[:, idx["WorkAlloc1",["mean"]]],
         color="blue")
 
 ax.plot(
-        x=work_alloc_data["Gen"],
-        y=work_alloc_data["WorkAlloc2"],
+        work_alloc_data_agg.loc[:, idx["WorkAlloc2",["mean"]]],
         color="red")
 
 # add a legend
@@ -270,71 +336,90 @@ ax.legend(
             r'$\mathcal{W}_{2}$'))
 
 
-ax.set_ylabel(r"WorkAlloc")
+ax.set_ylabel(r"Work alloc")
+
+ax.tick_params(
+        axis="x",
+        which="both",
+        labelbottom=False)
 
 # start next entry of the graph
 ax = plt.subplot(gs[4,0])
 
 ax.plot(
-        x=work_alloc_data["Gen"],
-        y=work_alloc_data["Idle"],
+        work_alloc_data_agg.loc[:, idx["Idle",["mean"]]],
         color="blue")
 
 ax.plot(
-        x=work_alloc_data["Gen"],
-        y=work_alloc_data["Inactive"],
+        work_alloc_data_agg.loc[:, idx["Inactive",["mean"]]],
         color="red")
+
+ax.set_ylabel(r"Idle etc")
 
 # add a legend
 ax.legend(
         (r'Idle',
             r'Inactive'))
 
+ax.tick_params(
+        axis="x",
+        which="both",
+        labelbottom=False)
 
 # start next entry of the graph
 ax = plt.subplot(gs[5,0])
 
 ax.plot(
-        x=work_alloc_data["Gen"],
-        y=work_alloc_data["Fitness"],
+        work_alloc_data_agg.loc[:, idx["Fitness",["mean"]]],
         color="blue")
 
+ax.tick_params(
+        axis="x",
+        which="both",
+        labelbottom=False)
+
+
+ax.set_ylabel(r"Total $w$")
 # start next entry of the graph
 ax = plt.subplot(gs[6,0])
 
 ax.plot(
-        x=work_alloc_data["Gen"],
-        y=work_alloc_data["End_stim1"],
+        work_alloc_data_agg.loc[:, idx["End_stim1",["mean"]]],
         color="blue")
 
 ax.plot(
-        x=work_alloc_data["Gen"],
-        y=work_alloc_data["End_stim2"],
+        work_alloc_data_agg.loc[:, idx["End_stim2",["mean"]]],
         color="red")
+
+ax.set_ylabel(r"Stimulus")
 
 # add a legend
 ax.legend(
-        (r'End_stim1',
-            r'End_stim2'))
+        (r'End stim1',
+            r'End stim2'))
+
+ax.tick_params(
+        axis="x",
+        which="both",
+        labelbottom=False)
 
 
 # start next entry of the graph
 ax = plt.subplot(gs[7,0])
 
 ax.plot(
-        x=work_alloc_data["Gen"],
-        y=work_alloc_data["mean_switches"],
+        work_alloc_data_agg.loc[:, idx["mean_switches",["mean"]]],
         color="blue")
 
 ax.plot(
-        x=work_alloc_data["Gen"],
-        y=work_alloc_data["mean_workperiods"],
+        work_alloc_data_agg.loc[:, idx["mean_workperiods",["mean"]]],
         color="red")
 
+ax.set_ylabel(r"Switches")
 # add a legend
 ax.legend(
-        (r'mean_switches',
-            r'mean_workperiods'))
+        (r'Switches',
+            r'Workperiods'))
 
 format = "pdf"
 
