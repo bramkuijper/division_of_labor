@@ -888,7 +888,7 @@ void UpdateStimPerAnt(Params & Par, Colony & anyCol, Ant & anyAnt, int task)
     anyCol.stim[task] -= (anyAnt.alpha[task]/Par.N); 
        
     // set boundary of the stimulus at 0
-    if(anyCol.stim[task] < 0)
+    if (anyCol.stim[task] < 0)
     {
         anyCol.stim[task] = 0;
     }
@@ -1608,7 +1608,7 @@ void Name_Data_Files(
     data3 = tmp3.str();
 
     stringstream tmp4;
-    tmp4 << "branch.txt";
+    tmp4 << "threshold.txt";
     data4 = tmp4.str();
 
     stringstream tmp5;
@@ -1812,6 +1812,8 @@ int main(int argc, char* argv[])
     // add these parameters to parameter object
     myPars.Init_Params(inp);
 
+    int skip_threshold = myPars.maxgen / 1000;
+
     // set up the random number generators
     // (from the gnu gsl library)
     gsl_rng_env_setup();
@@ -1882,8 +1884,10 @@ int main(int argc, char* argv[])
     // add data headers
     out2 << "generation;learn;forget" << endl;
 
-
     out3.open(datafile3.c_str());    
+    
+    
+    out4.open(datafile4.c_str());    
 
 #ifdef WRITE_LASTGEN_PERSTEP 
     out_ants.open(dataants.c_str()); 
@@ -2001,7 +2005,20 @@ int main(int argc, char* argv[])
                 Write_Ants_Beh(MyColonies[col_i], col_i, out_ants);	
             }
 #endif
+
         }
+      
+        // write threshold data once every while
+        if (current_generation % skip_threshold == 0)
+        {
+            Write_Ants_Thresholds(
+                    MyColonies,
+                    out4,
+                    0,
+                    current_generation);
+        }
+
+
 
         Write_Last_Generation(
                 MyColonies, 

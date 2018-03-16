@@ -2,7 +2,7 @@
 50;Col
 300;maxtime
 10.0;meanT1
-10.0;meanT2
+0.5.0;meanT2
 1.0;delta1
 1.0;delta2
 10;alpha_max_1

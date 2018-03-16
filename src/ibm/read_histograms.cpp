@@ -51,7 +51,7 @@ void initFile(
     // now iterate over folders to get everything but the last 
     base_path = "";
 
-    for (int i = 0; i < folders.size() - 1; ++i)
+    for (size_t i = 0; i < folders.size() - 1; ++i)
     {
         base_path += folders[i] + "/";
     }

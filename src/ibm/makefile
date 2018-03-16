@@ -16,3 +16,4 @@ cleanout:
 	rm -f lastgen*.txt
 	rm -f allele_distrib*
 	rm -f branch.txt
+	rm -f threshold.txt
