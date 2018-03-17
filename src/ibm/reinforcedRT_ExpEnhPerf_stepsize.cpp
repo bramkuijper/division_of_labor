@@ -732,10 +732,10 @@ void Init_Ants(Ant & myAnt, Params & Par, Colony & myCol, int numID, gsl_rng *rn
     myAnt.alpha.resize(Par.tasks);
     myAnt.experience_points.resize(Par.tasks);
 
-    for (unsigned int task=0; task<Par.tasks; task++)
+    for (unsigned int task=0; task < Par.tasks; ++task)
     {
         myAnt.threshold[task]= Par.meanT[task];
-        myAnt.experience_points[task]= 0;
+        myAnt.experience_points[task] = 0;
     }
 
     if (Par.maxgen > 1)
@@ -751,7 +751,7 @@ void Init_Ants(Ant & myAnt, Params & Par, Colony & myCol, int numID, gsl_rng *rn
     myAnt.countacts.resize(Par.tasks);
     myAnt.want_task.resize(Par.tasks);
 
-    for (unsigned int task = 0; task < Par.tasks; task++)
+    for (unsigned int task = 0; task < Par.tasks; ++task)
     {
         myAnt.countacts[task]=0;
         myAnt.want_task[task]=false;
@@ -964,9 +964,6 @@ void QuitTask(Colony & anyCol, Ant & anyAnt, int job, Params & Par, gsl_rng *rng
     // evaluate chance to quit
     if (q <= Par.p)
     {
-        // OK ant quits
-        //
-        // ant does not want to do any task
         anyAnt.want_task[anyAnt.curr_act] = false;
 
         // set time worked to zero, 
@@ -976,7 +973,7 @@ void QuitTask(Colony & anyCol, Ant & anyAnt, int job, Params & Par, gsl_rng *rng
         // set her current task to something beyond the current task options
         anyAnt.curr_act = Par.tasks;
     }
-    else
+    else // ant does not quit
     {
         // only when stimulus levels are immediately updated
         // when ant starts to work
@@ -1655,21 +1652,21 @@ void Write_Col_Data(
         int gen,
         int colony)
 {
-	mydata << gen << "\t" << colony;
+	mydata << gen << ";" << colony;
 
 	for (unsigned int task = 0; task < Par.tasks; ++task)
     {
-	    mydata << "\t" << Col.fitness_work[task] 
-	            << "\t" << Col.mean_work_alloc[task];
+	    mydata << ";" << Col.fitness_work[task] 
+	            << ";" << Col.mean_work_alloc[task];
     }
 
-    mydata << "\t" << Col.idle 
-            << "\t" << Col.inactive 
-            << "\t" << Col.fitness 
-            << "\t" << Col.stim[0] 
-            << "\t" << Col.stim[1] 
-            << "\t" << Col.mean_switches 
-            << "\t" << Col.mean_workperiods << endl;  
+    mydata << ";" << Col.idle 
+            << ";" << Col.inactive 
+            << ";" << Col.fitness 
+            << ";" << Col.stim[0] 
+            << ";" << Col.stim[1] 
+            << ";" << Col.mean_switches 
+            << ";" << Col.mean_workperiods << endl;  
 }
 //------------------------------------------------------------------------------------------------------
 // write out all the alleles to get an overview of
@@ -1704,18 +1701,18 @@ void Write_Alleles_Spec(
 // add headers to the data files
 void Header_data(ofstream & header, ofstream & header2)
 {
-	    header << "Gen" << "\t" 
-		<< "Col"  << "\t" 
-		<< "FitWork1" << "\t" 
-		<< "FitWork2" << "\t" 
-		<< "WorkAlloc1" << "\t" 
-		<< "WorkAlloc2" <<"\t" 
-		<< "Idle"<< "\t" 
-		<< "Inactive" << "\t"
-		<<"Fitness" << "\t" 
-		<< "End_stim1" << "\t" 
-		<< "End_stim2" << "\t"
-		<< "mean_switches" << "\t"
+	    header << "Gen" << ";" 
+		<< "Col"  << ";" 
+		<< "FitWork1" << ";" 
+		<< "FitWork2" << ";" 
+		<< "WorkAlloc1" << ";" 
+		<< "WorkAlloc2" <<";" 
+		<< "Idle"<< ";" 
+		<< "Inactive" << ";"
+		<<"Fitness" << ";" 
+		<< "End_stim1" << ";" 
+		<< "End_stim2" << ";"
+		<< "mean_switches" << ";"
 		<< "mean_workperiods" << endl; 
 
 #ifdef WRITE_LASTGEN_PERSTEP
@@ -1763,22 +1760,133 @@ void Write_Data_1Gen(ofstream & mydata,
 // write down individual ants
 void Write_Ants_Beh(Colony & Col, 
         unsigned int colony_number,
-        ofstream & mydata) 
+        unsigned int time_step,
+        unsigned int generation,
+        ofstream & mydata,
+        Params &Par) 
 {
+    vector <double> meanth(Par.tasks,0);
+    vector <double> meancountact(Par.tasks,0);
+    vector <double> meanexperiencepoint(Par.tasks,0);
+    vector <double> meanalpha(Par.tasks,0);
+
+    double meanswitches = 0;
+    double meanworkperiods = 0;
+
+    vector <double> ssth(Par.tasks,0);
+    vector <double> sscountact(Par.tasks,0);
+    vector <double> ssexperiencepoint(Par.tasks,0);
+    vector <double> ssalpha(Par.tasks,0);
+
+    double ssswitches = 0;
+    double ssworkperiods = 0;
+
     for (unsigned int ant = 0; ant < Col.MyAnts.size(); ++ant)
     {
-        mydata << colony_number << ";" << ant << ";" 
-            << Col.MyAnts[ant].threshold[0] << ";" 
-            << Col.MyAnts[ant].threshold[1] << ";" 
-            << Col.MyAnts[ant].countacts[0] << ";" 
-            << Col.MyAnts[ant].countacts[1] << ";"
-            << Col.MyAnts[ant].experience_points[0] << ";"
-            << Col.MyAnts[ant].experience_points[1] << ";"
-            << Col.MyAnts[ant].alpha[0] << ";"
-            << Col.MyAnts[ant].alpha[1] << ";" 
-            << Col.MyAnts[ant].switches << ";"
-            << Col.MyAnts[ant].workperiods << endl;  
+        for (unsigned int task_i = 0; task_i < Par.tasks; ++task_i)
+        {
+            meanth[task_i] += Col.MyAnts[ant].threshold[task_i];
+            
+            ssth[task_i] += Col.MyAnts[ant].threshold[task_i]
+                * Col.MyAnts[ant].threshold[task_i];
+
+
+
+            meancountact[task_i] += Col.MyAnts[ant].countacts[task_i];
+
+            sscountact[task_i] += Col.MyAnts[ant].countacts[task_i]
+                * Col.MyAnts[ant].countacts[task_i];
+
+
+            meanexperiencepoint[task_i] += 
+                Col.MyAnts[ant].experience_points[task_i];
+
+            ssexperiencepoint[task_i] += 
+                Col.MyAnts[ant].experience_points[task_i]
+                *
+                Col.MyAnts[ant].experience_points[task_i];
+
+
+
+            meanalpha[task_i] += Col.MyAnts[ant].alpha[task_i];
+
+            ssalpha[task_i] += Col.MyAnts[ant].alpha[task_i] * 
+                Col.MyAnts[ant].alpha[task_i];
+        }
+
+        meanswitches += Col.MyAnts[ant].switches;
+        ssswitches += Col.MyAnts[ant].switches * 
+            Col.MyAnts[ant].switches;
+
+        meanworkperiods += Col.MyAnts[ant].workperiods;
+        ssworkperiods += Col.MyAnts[ant].workperiods * 
+            Col.MyAnts[ant].workperiods;
     }
+
+    meanswitches /= Par.N;
+    meanworkperiods /= Par.N;
+    ssswitches /= Par.N;
+    ssworkperiods /= Par.N;
+
+    if (colony_number == 0 && time_step == 0 && generation == 0)
+    {
+        mydata << "generation;time;col_id;"
+            << "meanswitches;meanworkperiods;"
+            << "sdswitches;sdworkperiods;";
+
+        for (unsigned int task_i = 0; task_i < Par.tasks; ++task_i)
+        {
+            mydata << "meanthreshold" << (task_i + 1) << ";";
+            mydata << "meancountact" << (task_i + 1) << ";";
+            mydata << "meanexperiencepoints" << (task_i + 1) << ";";
+            mydata << "meanalpha" << (task_i + 1) << ";";
+            mydata << "sdthreshold" << (task_i + 1) << ";";
+            mydata << "sdcountact" << (task_i + 1) << ";";
+            mydata << "sdexperiencepoints" << (task_i + 1) << ";";
+            mydata << "sdalpha" << (task_i + 1) << ";";
+            mydata << "stim" << (task_i + 1) << ";";
+        }
+
+        mydata << endl;
+    }
+
+    mydata << generation << ";" 
+        << time_step << ";"
+        << colony_number << ";"
+        << meanswitches << ";"
+        << meanworkperiods << ";"
+        << sqrt(ssswitches - meanswitches * meanswitches) << ";"
+        << sqrt(ssworkperiods - meanworkperiods * meanworkperiods) << ";";
+
+    for (unsigned int task_i = 0; task_i < Par.tasks; ++task_i)
+    {
+        meanth[task_i] /= Par.N;
+
+        meancountact[task_i] /= Par.N;
+        meanexperiencepoint[task_i] /= Par.N;
+        meanalpha[task_i] /= Par.N;
+
+        ssth[task_i] /= Par.N;
+        sscountact[task_i] /= Par.N;
+        ssexperiencepoint[task_i] /= Par.N;
+        ssalpha[task_i] /= Par.N;
+
+        mydata 
+            << meanth[task_i] << ";"
+            << meancountact[task_i] << ";"
+            << meanexperiencepoint[task_i] << ";"
+            << meanalpha[task_i] << ";"
+            << sqrt(ssth[task_i] - meanth[task_i] * meanth[task_i]) << ";"
+            << sqrt(sscountact[task_i] - 
+            meancountact[task_i] * meancountact[task_i]) << ";"
+            << sqrt(ssexperiencepoint[task_i] - 
+            meanexperiencepoint[task_i] * meanexperiencepoint[task_i]) << ";"
+            << sqrt(ssalpha[task_i] - 
+            meanalpha[task_i] * meanalpha[task_i]) << ";"
+            << Col.stim[task_i] << ";";
+    }
+
+    mydata << endl;
 }
 //=========================================================================================================
 // writing ants' thresholds 
@@ -1908,7 +2016,7 @@ int main(int argc, char* argv[])
 
         // now go through all colonies and let them do work
         // for myPars.maxtime timesteps
-# pragma omp parallel num_threads(5)
+# pragma omp parallel num_threads(1)
         {
 # pragma omp for
 
@@ -1947,14 +2055,27 @@ int main(int argc, char* argv[])
                     // which has consequences for stimulus levels, 
                     // which you update here
                     Update_Stim(Current_Colony, localParams);
+
+#ifdef WRITE_LASTGEN_PERSTEP 
+                    Write_Ants_Beh(
+                            Current_Colony,
+                            col_i,
+                            k,
+                            current_generation,
+                            out_ants,
+                            localParams);
+#endif
                 }
 
                 // calculate absolute fitness of this population
                 // in the last timestep
                 Calc_Abs_Fitness(Current_Colony, localParams);
+                
+
 
                 // return the current colony to the stack
                 MyColonies[col_i] = Current_Colony;
+
             }
         }
 
@@ -2000,23 +2121,21 @@ int main(int argc, char* argv[])
                         MyColonies[col_i], 
                         col_i, 
                         myPars, 
-                        Pars.maxtime);
-
-                Write_Ants_Beh(MyColonies[col_i], col_i, out_ants);	
+                        myPars.maxtime);
             }
 #endif
 
         }
       
-        // write threshold data once every while
-        if (current_generation % skip_threshold == 0)
-        {
-            Write_Ants_Thresholds(
-                    MyColonies,
-                    out4,
-                    0,
-                    current_generation);
-        }
+//        // write threshold data once every while
+//        if (current_generation % skip_threshold == 0)
+//        {
+//            Write_Ants_Thresholds(
+//                    MyColonies,
+//                    out4,
+//                    0,
+//                    current_generation);
+//        }
 
 
 

@@ -1,8 +1,8 @@
 50;N
 50;Col
-300;maxtime
+10000;maxtime
 10.0;meanT1
-0.5.0;meanT2
+10.0;meanT2
 1.0;delta1
 1.0;delta2
 10;alpha_max_1
@@ -13,7 +13,7 @@
 3.3e-05;beta_2
 0.2;p
 0.01;mutp
-10000;maxgen
+1;maxgen
 1.0;beta_fit
 1.0;gamma_fit
 0.5;recomb
@@ -23,9 +23,9 @@
 0.1;p_wait
 0;tau
 0.1;initForget
-0.1;initLearn
+0.5;initLearn
 0.2;step_gain_exp
 0.1;step_lose_exp
 1.0;threshold_noise
 0.1;K
-1762368092;seed
+2324124;seed

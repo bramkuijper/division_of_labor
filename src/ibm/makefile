@@ -17,3 +17,6 @@ cleanout:
 	rm -f allele_distrib*
 	rm -f branch.txt
 	rm -f threshold.txt
+	rm -f thresholds*.txt
+	rm -f ant_beh*.txt
+	rm -f data_1gen*.txt
