@@ -2016,7 +2016,7 @@ int main(int argc, char* argv[])
 
         // now go through all colonies and let them do work
         // for myPars.maxtime timesteps
-# pragma omp parallel num_threads(1)
+# pragma omp parallel num_threads(5)
         {
 # pragma omp for
 

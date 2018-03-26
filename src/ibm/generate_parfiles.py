@@ -61,7 +61,7 @@ class RunGenerator:
 
     # generate a batch directory with all folders
     # which contain runs and executables
-    def generate_batch(self):
+    def generate_batch(self, nrep=1):
 
         # check that the dataframe has more than 0 rows
         assert(self.all_runs.shape[0] > 0)
@@ -81,27 +81,37 @@ class RunGenerator:
         batch_dir = self.dest_dir / batch_dir_name
         batch_dir.mkdir()
 
-        # loop through all rows and generate the folders
-        for row_number, row in self.all_runs.iterrows():
 
-            # create new subfolder for a single run
+        core_number = 0
 
-            # make the name of the subfolder
-            folder_name = self.run_dir_prefix + "_" + str(row_number)
-       
-            # create it
-            current_folder = batch_dir / folder_name
-            current_folder.mkdir()
+        # ok, make several replicates
+        for replicate in range(0,nrep):
 
-            # write the parameter file
-            self.write_parameter_file(current_folder, row_number, row)
+            print(replicate)
 
-            # copy the executable to the new directory
-            shutil.copy(str(self.exe), 
-                    str(current_folder / self.exe.name))
+            # loop through all rows and generate the folders
+            for rownum, row in self.all_runs.iterrows():
 
-            # now make the jobfile
-            self.create_jobfile(batch_dir, current_folder, row_number)
+                # create new subfolder for a single run
+
+                # make the name of the subfolder
+                folder_name = self.run_dir_prefix + "_" + str(core_number)
+           
+                # create it
+                current_folder = batch_dir / folder_name
+                current_folder.mkdir()
+
+                # write the parameter file
+                self.write_parameter_file(current_folder, core_number, row)
+
+                # copy the executable to the new directory
+                shutil.copy(str(self.exe), 
+                        str(current_folder / self.exe.name))
+
+                # now make the jobfile
+                self.create_jobfile(batch_dir, current_folder, core_number)
+
+                core_number += 1
 
     # create the jobfile which can be submitted using qsub to run the thing.
     # batch_dir: the parent batch directory (see generate_batch())
@@ -150,6 +160,8 @@ class RunGenerator:
         # first generate the contents of the file
         file_contents = ""
 
+        print(param_data)
+
         for param_key, param_value in param_data.iteritems():
             file_contents += str(param_value) + ";" + param_key + "\n"
 
@@ -180,8 +192,8 @@ def expand_grid(data_dict):
 maxtime = 3000 
 # make a dictionary of all the parameters
 pardict = {
-        "N":[80], # number of workers / colony
-        "Col": [400], # number of colonies
+        "N": [50], # number of workers / colony
+        "Col": [50], # number of colonies
         "maxtime": [maxtime], # time steps work is performed before reproduction
         "meanT1" : [ 10.0 ], # mean threshold for each task
         "meanT2" : [ 10.0 ], # mean threshold for each task
@@ -225,8 +237,8 @@ all_combinations["seed"] = np.random.randint(
 rg = RunGenerator(
         all_run_combinations = all_combinations, 
         dest_dir="/home/bram/",
-        exe="xreinforcedRT"
+        exe="xreinforcedRT",
         )
 
 # generate the batch
-rg.generate_batch()
+rg.generate_batch(nrep=4)
