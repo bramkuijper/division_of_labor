@@ -11,6 +11,8 @@
 #include <fstream>
 #include <cassert>
 #include <algorithm>
+#include <gsl/gsl_rng.h>
+#include <gsl/gsl_randist.h>
 
 //#define DEBUG
 #define SIMULTANEOUS_UPDATE
@@ -19,7 +21,12 @@
 
 using namespace std;
 
+// random number generator 
+// see http://www.gnu.org/software/gsl/manual/html_node/Random-Number-Generation.html#Random-Number-Generation 
+gsl_rng_type const * T; // gnu scientific library rng type
+gsl_rng *rng_global; // gnu scientific rng 
 
+// parameter
 struct Params
 {
     int N; //number of workers
@@ -32,54 +39,66 @@ struct Params
     double beta_fit, gama_fit;
     int seed;
 
-    vector<double> meanT; // mean threshold 1
-    vector<double> delta;
-    vector<double> alfa;
-    vector<double> beta;
-    
+    int no_task; // number indicating that the current task
+                    // is no task
+
+    // vectors containing stimulus parameters
+    vector<double> meanT; // mean thresholds
+    vector<double> delta; // stimulus increase
+    vector<double> alfa; // stimulus decrease due to work
+
+    // vectors containing fitness parameters
+    vector<double> beta; // weights of work on task i 
+                        // in fitness equation
+   
+    // function to read in the parameters from stream
     istream & InitParams(istream & inp);
 };
 
+
+// the ant's data
 struct Ant
 {
-// genome
-vector < double > threshold;
-// behaviour
-//vector < bool > act; // active or not at task 1 or 2
-vector < int > countacts;   // counter of acts done by this ant
-int last_act;
-int curr_act;
-int switches; // transitions to a different task
-int workperiods; // number of working periods 
-double F; // specialization value
-bool mated;
-double F_franjo;
+    // genome
+    vector < double > threshold; // thresholds of this ant
+    vector < int > countacts;   // counter of acts done by this ant
+    int last_act;
+    int curr_act;
+    int switches; // number of transitions to a different task
+    int workperiods; // number of working periods 
+    double F; // specialization value
+    bool mated;
+    double F_franjo;
 };
 
+// set up vectors of workers and sexuals
 typedef vector < Ant > Workers;
 typedef vector <Ant> Sexuals;
 
+// set up the colony containing ants
 struct Colony
 {
-Workers MyAnts;
-Ant male, queen;
-int ID;
-vector<double> stim;
-vector<double> newstim;
-vector<double> workfor;  // number acts * eff each time step
-vector < int > numacts; // number of acts performed per task
-double idle; // proportion idle workers
-vector <double>last_half_acts; //number of acts performed in the last half of simulation
-double fitness;
-double diff_fit;// fitness difference to minimal fitness
-double rel_fit; // fitness relative to whole population
-double cum_fit; //cumulative fitness
-vector<double>HighF, LowF, CategF;
-vector<double> HighT, LowT, CategT1, CategT2;
-vector<double>mean_work_alloc;
-double mean_F;
-int num_offspring;
-double mean_F_franjo;
+    Workers MyAnts; // stack of workers
+    Ant male, queen; // queen and her male
+    int ID; // unique ID of the colony
+
+    vector<double> stim; // stimulus levels
+    vector<double> newstim; // stimulus levels new timestep
+    vector<double> workfor;  // number acts * eff each time step
+    vector < int > numacts; // number of acts performed per task
+    double idle; // proportion idle workers
+    vector <double>last_half_acts; //number of acts performed in the last half of simulation
+    double fitness; 
+    double diff_fit;// fitness difference to minimal fitness
+    double rel_fit; // fitness relative to whole population
+    double cum_fit; //cumulative fitness
+
+    vector<double>HighF, LowF, CategF;
+    vector<double> HighT, LowT, CategT1, CategT2;
+    vector<double>mean_work_alloc;
+    double mean_F;
+    int num_offspring;
+    double mean_F_franjo;
 };
 
 typedef vector < Colony > Population;
@@ -87,304 +106,377 @@ vector <int> parentCol;
 double sum_Fit;
 Sexuals mySexuals;
 
+
+// read in the parameter file
 istream & Params::InitParams(istream & in)
 {
+    // set the number of tasks
     tasks = 2;    
 
+    // read in population size
     in >> N >>
-        Col >>
-        maxtime; 
+        Col >> // number of colonies
+        maxtime;  // number of timesteps work is being done
+                    // during each evolutionary generation
+
     double tmp;
+
+    // read in the initial mean thresholds for each stimulus
     for (int i=0; i<tasks; i++) 
-        {
-        in >> tmp ; 
+    {
+        in >> tmp; 
         meanT.push_back(tmp);
-        }
+    }
+
+    // read in the baseline increases per stimulus
     for (int i=0; i<tasks; i++) 
-        {    
+    {    
         in >> tmp ; 
         delta.push_back(tmp);
-        }
+    }
+
+    // read in the stimulus decrease parameters
     for (int i=0; i<tasks; i++)
-        {
+    {
         in >> tmp; 
         alfa.push_back(tmp);
-        }
+    }
+
+    // read in the fitness weights of each task
     for (int i=0; i<tasks; i++) 
-        {
+    {
         in >> tmp;
         beta.push_back(tmp);
-        }
-    in >> p >>
-        mutp >>
-        maxgen >>
-        beta_fit >>
-        gama_fit >>
+    }
+
+    in >> p >> // quitting probability
+        mutp >> // mutation probability
+        maxgen >> // maximum number of generations
+        beta_fit >> // fitness weights
+        gama_fit >> // fitness weights
         seed;
 
-return in;
+    // set a number which indicates that ants are currently 
+    // working on no task at all
+    no_task = 7;
+
+    return in;
 }
 
 //----------------------------------------------------------------------------------
+
+// diagnostic function to see whether parameters
+// have been read in correctly
 void ShowParams(Params & Par)
-        {
-         cout <<"Workers " << Par.N << endl;
-         cout << "Colonies " << Par.Col << endl;
-         cout << "Timesteps " << Par.maxtime << endl;
-         
-         for (int task=0; task<Par.tasks; task++)
-            cout << "Initial T" <<task <<"\t" << Par.meanT[task] << endl;
-         
-         for (int task=0; task<Par.tasks; task++)
-            cout << "Delta " <<task <<"\t"  << Par.delta[task] << endl;
-         
-         for (int task=0; task<Par.tasks; task++)
-            cout << "effic " << task << "\t" << Par.alfa[task] << endl;
-         
-         for (int task=0; task<Par.tasks; task++)
-            cout << "Decay " << task << "\t" << Par.beta[task] << endl;
-         
-         cout << "prob quit" << Par.p << endl;
-         cout << "Task number " << Par.tasks << endl;
-         cout << "mut prob " << Par.mutp << endl;
-         cout << "Max gen " <<  Par.maxgen << endl;
-         cout << "Exp task 1 " <<  Par.beta_fit << endl;
-         cout << "Exp task 2 " <<  Par.gama_fit << endl;
-         cout << "seed " << Par.seed << endl;
-        }
+{
+     cout <<"Workers " << Par.N << endl;
+     cout << "Colonies " << Par.Col << endl;
+     cout << "Timesteps " << Par.maxtime << endl;
+     
+     for (int task=0; task<Par.tasks; task++)
+     {
+        cout << "Initial T" <<task <<"\t" << Par.meanT[task] << endl;
+     }
+     
+     for (int task=0; task<Par.tasks; task++)
+     {
+        cout << "Delta " <<task <<"\t"  << Par.delta[task] << endl;
+     }
+     
+     for (int task=0; task<Par.tasks; task++)
+     {
+        cout << "effic " << task << "\t" << Par.alfa[task] << endl;
+     }
+     
+     for (int task=0; task<Par.tasks; task++)
+     {
+        cout << "Decay " << task << "\t" << Par.beta[task] << endl;
+     }
+     
+     cout << "prob quit" << Par.p << endl;
+     cout << "Task number " << Par.tasks << endl;
+     cout << "mut prob " << Par.mutp << endl;
+     cout << "Max gen " <<  Par.maxgen << endl;
+     cout << "Exp task 1 " <<  Par.beta_fit << endl;
+     cout << "Exp task 2 " <<  Par.gama_fit << endl;
+     cout << "seed " << Par.seed << endl;
+}
 //-----------------------------------------------------------------------------
 
 
-
+// initialize founders 
 void InitFounders(Population &Pop, Params &Par)
-	{
+{
 #ifdef DEBUG  
-        assert(Par.tasks==2);
-        cout <<Par.Col << endl;
+    assert(Par.tasks==2);
+    cout <<Par.Col << endl;
 #endif
-        Pop.resize(Par.Col);
-        //cout << "Initializing founders!" << endl;
-	for (unsigned int i = 0; i < Pop.size(); i++)
-		{
-		Pop[i].male.threshold.resize(Par.tasks);
-		Pop[i].queen.threshold.resize(Par.tasks);
-		for(int task=0; task<Par.tasks; task++)
-            {
-            Pop[i].male.threshold[task]= Normal(Par.meanT[task],1);
-		    Pop[i].queen.threshold[task]= Normal(Par.meanT[task],1);
-            }
-		Pop[i].male.mated =true;
-		Pop[i].queen.mated = true;
-               // cout << Pop[i].male.threshold[0] << "\t" << Pop[i].male.threshold[1] << endl;
-               // cout << Pop[i].queen.threshold[0] << "\t" << Pop[i].queen.threshold[1] << endl;
-                //getch();
-		}
-	}
+    Pop.resize(Par.Col);
+
+    // initialize thresholds of males and queens
+    for (unsigned int i = 0; i < Pop.size(); ++i)
+    {
+        Pop[i].male.threshold.resize(Par.tasks);
+        Pop[i].queen.threshold.resize(Par.tasks);
+
+        // give males and queens random thresholds
+        for (int task=0; task<Par.tasks; ++task)
+        {
+            Pop[i].male.threshold[task] = Par.meanT[task] 
+                + gsl_ran_gaussian(rng_global,1);
+
+            Pop[i].queen.threshold[task] = Par.meanT[task] 
+                + gsl_ran_gaussian(rng_global,1);
+        }
+
+        Pop[i].male.mated =true;
+        Pop[i].queen.mated = true;
+    }
+}
 //----------------------------------------------------------------------------------------------------------------------
+
+// parent offspring inheritance
 void Inherit(Ant &Daughter, Ant &Mom, Ant &Dad, Params &Par)
-	{
-	for (int task = 0; task < Par.tasks; task++)
-		{
-                assert (task < 2);
-               // cout << "For task " << task << endl;
-                double anynumber = Uniform();
-                //cout << anynumber << endl;
-		int who = RandomNumber(2);
-               // cout << "inherited from " << who << endl;
-		if (who ==0)
-			{
-			if (Par.mutp > anynumber)
-				Daughter.threshold[task] = Mom.threshold[task] + Normal(0,1);
-			else Daughter.threshold[task] = Mom.threshold[task];
-			}
+{
+    for (int task = 0; task < Par.tasks; ++task)
+    {
+        // draw a random number designating the parent who is the one
+        // who inherits the trait
+        int from_which_parent = gsl_rng_uniform_int(ran_gaussian, 2);
 
-		else if (who==1)
-			{
-			if (Par.mutp > anynumber)
-				Daughter.threshold[task] = Dad.threshold[task] + Normal(0,1);
-			else Daughter.threshold[task] = Dad.threshold[task];
-			}
-                if (Daughter.threshold[task]<0) Daughter.threshold[task]=0.0;
-
-                //assert(Daughter.threshold[task]>0);
-		}
-	}
+        // inherit from mom
+        if (from_which_parent == 0)
+        {
+            // mutate 
+            if (gsl_rng_uniform(ran_gaussian) < Par.mutp)
+            {
+                Daughter.threshold[task] = Mom.threshold[task] 
+                    + gsl_ran_gaussian(rng_global,1);
+            }
+            else 
+            {
+                Daughter.threshold[task] = Mom.threshold[task];
+            }
+        }
+        else // alternatively, inherit from dad
+        {
+            if (Par.mutp > anynumber)
+            {
+                Daughter.threshold[task] = Dad.threshold[task] 
+                    + gsl_ran_gaussian(rng_global,1);
+            }
+            else
+            {
+                Daughter.threshold[task] = Dad.threshold[task];
+            }
+        }
+        
+        // set boundaries 
+        if (Daughter.threshold[task] < 0)
+        {
+            Daughter.threshold[task] = 0.0;
+        }
+    }
+}
 
 //----------------------------------------------------------------------------------------------------------
 
+
+// initialize the ants in the colony
 void InitAnts(Ant & myAnt, Params & Par, Colony & myCol)
-  {
-  myAnt.threshold.resize(Par.tasks);
+{
+    myAnt.threshold.resize(Par.tasks);
 
-  if (Par.maxgen > 1) Inherit(myAnt, myCol.queen, myCol.male, Par);
-  else 
+    if (Par.maxgen > 1)
     {
-    for (int task=0; task<Par.tasks; task++)
-        myAnt.threshold[task]= Par.meanT[task];
+        Inherit(myAnt, myCol.queen, myCol.male, Par);
+    }
+    else 
+    {
+        for (int task=0; task<Par.tasks; ++task)
+        {
+            myAnt.threshold[task] = Par.meanT[task];
+        }
     }
 
-  myAnt.countacts.resize(Par.tasks);
-  for (int task = 0; task < Par.tasks; task++)
+    myAnt.countacts.resize(Par.tasks);
+
+    for (int task = 0; task < Par.tasks; ++task)
     {
-    myAnt.countacts[task]=0;
-    //cout << myAnt.threshold[task] << "\t" ;
-  //  if (myAnt.threshold[task]<=0)
-    //   {
-      // cout << myAnt.threshold[task] << "\t" ;
-       //getch();
-      // }
-    //assert(myAnt.threshold[task]>0);
+        myAnt.countacts[task]=0;
     }
-    //other stuff
-  //myAnt.act.resize(3);
- // myAnt.act[0] = false;  // doing task 1
- // myAnt.act[1] = false;  // doing task 2
- // myAnt.act[2] = true; // idle
-  myAnt.last_act = 7; // initiate it at an impossible value for a task, because 0 is a task
-  myAnt.curr_act = 2; // 0 = task 1, 1 = task 2, 2 = idle
-  myAnt.switches = 0;
-  myAnt.workperiods=0;
-  myAnt.F = 10;
-  myAnt.F_franjo = 10;
-  myAnt.mated = false;
-  }
+    
+    myAnt.last_act = Par.no_task; // set at a value of no task
+    myAnt.curr_act = 2; // 0 = task 1, 1 = task 2, 2 = idle
+    myAnt.switches = 0; // set counter of switches to 0
+    myAnt.workperiods=0;
+    myAnt.F = 10;
+    myAnt.F_franjo = 10;
+    myAnt.mated = false;
+}
 
 
 //------------------------------------------------------------------------------------
 
+// initilialize all colonies at the start of each 
+// evolutionary generation
 void Init(Population & Pop, Params & Par)
-  {
+{
 #ifdef DEBUG
     cout << Pop.size() << endl;
     cout << Par.N << endl;
-      assert(Pop.size()==Par.Col);
+    assert(Pop.size()==Par.Col);
 #endif
       
-  //cout << " Initiating colonies" << endl;
-  for (unsigned int i = 0; i< Pop.size(); i++)
+    for (unsigned int i = 0; i< Pop.size(); i++)
     {
-    Pop[i].MyAnts.resize(Par.N);
-   // Pop[i].HighF.resize(21);
-   // Pop[i].LowF.resize(21);
-   // Pop[i].CategF.resize(21);
-   // Pop[i].HighT.resize(21);
-   // Pop[i].LowT.resize(21);
-   // Pop[i].CategT1.resize(21);
-   // Pop[i].CategT2.resize(21);
-    Pop[i].ID = i;
-    Pop[i].fitness = 0;
-    Pop[i].rel_fit = 0;
-    Pop[i].cum_fit = 0;
-    Pop[i].diff_fit = 0;
-    Pop[i].idle = 0;
-    Pop[i].mean_F = 10; // specialization value
-    Pop[i].mean_F_franjo =10;
-    //cout << Par.tasks << endl;
-   
-    if(!Pop[i].workfor.empty()) Pop[i].workfor.erase(Pop[i].workfor.begin(),Pop[i].workfor.end());
-    assert(Pop[i].workfor.empty());
+        Pop[i].MyAnts.resize(Par.N);
+        Pop[i].ID = i;
+        Pop[i].fitness = 0;
+        Pop[i].rel_fit = 0;
+        Pop[i].cum_fit = 0;
+        Pop[i].diff_fit = 0;
+        Pop[i].idle = 0;
+        Pop[i].mean_F = 10; // specialization value
+        Pop[i].mean_F_franjo =10;
 
-    if(!Pop[i].last_half_acts.empty()) 
-        Pop[i].last_half_acts.erase(Pop[i].last_half_acts.begin(),Pop[i].last_half_acts.end());
-   assert(Pop[i].last_half_acts.empty()); 
-
-    if(!Pop[i].numacts.empty()) 
-        Pop[i].numacts.erase(Pop[i].numacts.begin(),Pop[i].numacts.end());
-   assert(Pop[i].numacts.empty()); 
-    if(!Pop[i].stim.empty()) 
-        Pop[i].stim.erase(Pop[i].stim.begin(),Pop[i].stim.end());
-    assert(Pop[i].stim.empty()); 
-    if (!Pop[i].newstim.empty())
-        Pop[i].newstim.erase(Pop[i].newstim.begin(),Pop[i].newstim.end());
-    assert(Pop[i].newstim.empty());
-    if(!Pop[i].mean_work_alloc.empty());
-        Pop[i].mean_work_alloc.erase(Pop[i].mean_work_alloc.begin(),Pop[i].mean_work_alloc.end());
-   assert( Pop[i].mean_work_alloc.empty());
-    for (int job=0; job<Par.tasks; job++)
+        // erase any existing workforce numbers
+        if (!Pop[i].workfor.empty())
         {
-        Pop[i].workfor.push_back(0);
-        Pop[i].last_half_acts.push_back(0);
-        Pop[i].numacts.push_back(0);
-        Pop[i].stim.push_back(0);
-        Pop[i].newstim.push_back(0);
-        Pop[i].mean_work_alloc.push_back(0);
-        //cout << "Blah" << endl;
+            Pop[i].workfor.erase(
+                    Pop[i].workfor.begin(),
+                    Pop[i].workfor.end());
+        }
+
+        assert(Pop[i].workfor.empty());
+
+        // erase any existing fitness data
+        if (!Pop[i].workfor.empty())
+        if (!Pop[i].last_half_acts.empty()) 
+        {
+            Pop[i].last_half_acts.erase(
+                    Pop[i].last_half_acts.begin(),
+                    Pop[i].last_half_acts.end());
+        }
+
+        assert(Pop[i].last_half_acts.empty()); 
+
+        if (!Pop[i].numacts.empty()) 
+        {
+            Pop[i].numacts.erase(
+                    Pop[i].numacts.begin(),
+                    Pop[i].numacts.end());
+        }
+
+        assert(Pop[i].numacts.empty()); 
+
+        if (!Pop[i].stim.empty()) 
+        {
+            Pop[i].stim.erase(
+                    Pop[i].stim.begin(),
+                    Pop[i].stim.end());
+        }
+
+        assert(Pop[i].stim.empty()); 
+
+        if (!Pop[i].newstim.empty())
+        {
+            Pop[i].newstim.erase(
+                    Pop[i].newstim.begin(),
+                    Pop[i].newstim.end());
+        }
+
+        assert(Pop[i].newstim.empty());
+
+        if (!Pop[i].mean_work_alloc.empty())
+        {
+            Pop[i].mean_work_alloc.erase(
+                    Pop[i].mean_work_alloc.begin(),
+                    Pop[i].mean_work_alloc.end());
+        }
+
+        assert( Pop[i].mean_work_alloc.empty());
+
+        for (int job = 0; job < Par.tasks; ++job)
+        {
+            Pop[i].workfor.push_back(0);
+            Pop[i].last_half_acts.push_back(0);
+            Pop[i].numacts.push_back(0);
+            Pop[i].stim.push_back(0);
+            Pop[i].newstim.push_back(0);
+            Pop[i].mean_work_alloc.push_back(0);
         }
     
-    //InitFounders(Pop[i].male, Par);
-    //InitFounders(Pop[i].queen, Par);
-     for (unsigned int j = 0; j<Pop[i].MyAnts.size(); j++)
-       InitAnts (Pop[i].MyAnts[j], Par, Pop[i]);
-
+        for (unsigned int j = 0; j < Pop[i].MyAnts.size(); ++j)
+        {
+            InitAnts(Pop[i].MyAnts[j], Par, Pop[i]);
+        }
     } // end of for Pop
-  } // end of Init()
+} // end of Init()
 
 //-------------------------------------------------------------------------------
 
+// update the stimulus levels per ant
 void UpdateStimPerAnt(Params & Par, Colony & anyCol, Ant & anyAnt, int task)
 {
-
-    //cout << "Updating the stimulus per ant" << endl;
 #ifdef DEBUG
-cout << Par.alfa[task] << endl;
-   
-cout << Par.N << endl;
-cout << anyCol.workfor[task] << endl;
-cout <<anyCol.numacts[task]<< endl;
-cout << anyCol.stim[task] << endl;
+    cout << Par.alfa[task] << endl;
+    cout << Par.N << endl;
+    cout << anyCol.workfor[task] << endl;
+    cout <<anyCol.numacts[task]<< endl;
+    cout << anyCol.stim[task] << endl;
 #endif
-    anyCol.stim[task]-=(Par.alfa[task]/Par.N); 
-    if(anyCol.stim[task]<0)
-        anyCol.stim[task]=0;
+    anyCol.stim[task] -= (Par.alfa[task]/Par.N); 
+
+    if (anyCol.stim[task] < 0)
+    {
+        anyCol.stim[task] = 0;
+    }
 }
 //------------------------------------------------------------------------------
 
-
+// 
 void QuitTask(Colony & anyCol, Ant & anyAnt, int job, Params & Par)
-  {
+{
 #ifdef DEBUG
 cout << "Quitting tasks" << endl;
 cout << "chance to quit: " << Par.p << endl;
-
 #endif
-  double q = Uniform();
 
+    double q = gsl_rng_uniform(rng_global);
 
-#ifdef SIMULTANEOUS_UPDATE
-
-  if (q <= Par.p)
-     {
-     //anyAnt.act[job] = false;
-     //anyAnt.act[2] = true; // she quits task and becomes idle
-     anyAnt.curr_act = 2;
-     }
-#endif  
-
+    // ant quits
+    if (q <= Par.p)
+    {
+        anyAnt.curr_act = 2;
+    }
 #ifndef SIMULTANEOUS_UPDATE  
-  if (q <= Par.p)
-     {
-     //anyAnt.act[job] = false;
-     //anyAnt.act[2] = true; // she quits task and becomes idle
-     anyAnt.curr_act = 2;
-     }
-  else UpdateStimPerAnt(Par, anyCol, anyAnt, job);
+    else
+    {
+        UpdateStimPerAnt(Par, anyCol, anyAnt, job);
+    }
 #endif
-  
-  }
+}
 
 //------------------------------------------------------------------------------
 double RPfunction (double t, double s) // response probability
-  {
-  double RP;
-  
-//  cout << "threshold is: " << t << endl;
-  if (t > 0.00)  RP = s*s / ((s*s)+(t*t));
-  else if (s >0.00000)RP = 1.0; // if threshold is zero, then probability of acting is 1.  
-        else RP=0.0;             // if stim is zero, no work is done
-  //cout << "RP is: " << RP << endl;
-
+{
+    double RP;
+    if (t > 0.00)
+    {
+        RP = s*s / ((s*s)+(t*t));
+    }
+    else if (s >0.00000)
+    {
+        RP = 1.0; // if threshold is zero, then probability of acting is 1.  
+    }
+    else
+    {
+        RP=0.0;
+    }
+    
   return RP;
-  }
+}
 //-------------------------------------------------------------------------------
 void TaskChoice(Params & Par, Colony & anyCol, Ant & anyAnt)
 { 
@@ -525,7 +617,7 @@ void UpdateStim(Population & Pop, Params & Par)   // stimulus changes const incr
 	*/
 #ifdef SIMULTANEOUS_UPDATE
     for (int task=0; task<Par.tasks; task++)
-        {
+        { // maximum number of generations
             
         Pop[i].newstim[task] = Pop[i].stim[task] + Par.delta[task] - (Par.beta[task]*Pop[i].stim[task]) - (Pop[i].workfor[task]/Par.N) ; 
         Pop[i].stim[task] = Pop[i].newstim[task];
@@ -810,14 +902,18 @@ return mybool;
 
 int main(int argc, char* argv[])
 {
-Params myPars;
+    Params myPars;
 
-ifstream inp("params.txt");
+    ifstream inp("params.txt");
 
-myPars.InitParams(inp);
+    myPars.InitParams(inp);
 
-//ShowParams(myPars);
-//getch();
+    // set up the random number generators
+    // (from the gnu gsl library)
+    gsl_rng_env_setup();
+    T = gsl_rng_default;
+    rng_global = gsl_rng_alloc(T);
+    gsl_rng_set(rng_global, myPars.seed);
     
 static ofstream out; 
 static ofstream out2;
