@@ -36,7 +36,7 @@ struct Params
     int tasks;
     double mutp;//mutation probability
     int maxgen;
-    double beta_fit, gama_fit;
+    double beta_fit, gamma_fit;
     int seed;
 
     int no_task; // number indicating that the current task
@@ -142,7 +142,7 @@ istream & Params::InitParams(istream & in)
         mutp >> // mutation probability
         maxgen >> // maximum number of generations
         beta_fit >> // fitness weights
-        gama_fit >> // fitness weights
+        gamma_fit >> // fitness weights
         seed;
 
     // set a number which indicates that ants are currently 
@@ -182,7 +182,7 @@ void ShowParams(Params & Par)
      cout << "mut prob " << Par.mutp << endl;
      cout << "Max gen " <<  Par.maxgen << endl;
      cout << "Exp task 1 " <<  Par.beta_fit << endl;
-     cout << "Exp task 2 " <<  Par.gama_fit << endl;
+     cout << "Exp task 2 " <<  Par.gamma_fit << endl;
      cout << "seed " << Par.seed << endl;
 }
 //-----------------------------------------------------------------------------
@@ -606,6 +606,11 @@ void Calc_F(Population & Pop, Params & Par)
             colony_i < Pop.size(); 
             ++colony_i)
     {
+        
+        
+        double sumF=0;
+        double sumF_franjo=0;
+        double activ=0;
 
         for (unsigned int ant_i = 0; 
                 ant_i < Pop[colony_i].MyAnts.size(); 
@@ -620,89 +625,98 @@ void Calc_F(Population & Pop, Params & Par)
                 totacts += Pop[colony_i].MyAnts[ant_i].countacts[task];
             }
 
+            // calculate specialization values per ant
             if (totacts > 0) 
             {
                 C = double(Pop[colony_i].MyAnts[ant_i].switches) / 
                     Pop[colony_i].MyAnts[ant_i].workperiods;
 
-                Pop[colony_i].MyAnts[ant_i].F = 1.0 - 2*C;
+                Pop[colony_i].MyAnts[ant_i].F = 1.0 - 2.0*C;
                 Pop[colony_i].MyAnts[ant_i].F_franjo = 1.0 - C;
             }
-        }
-      
-    double sumF=0;
-    double sumF_franjo=0;
-    double activ=0;
-    for (unsigned int j = 0; j<Pop[colony_i].MyAnts.size(); j++)
-    {
-    totacts=0;
-    for (int task=0; task<Par.tasks; task++)
-        totacts += Pop[colony_i].MyAnts[j].countacts[task] ;
-    if (totacts>0 && Pop[colony_i].MyAnts[j].curr_act!=2)
+            
+            if (totacts > 0 && 
+                    Pop[colony_i].MyAnts[ant_i].curr_act < Par.tasks)
             {
-            sumF += Pop[colony_i].MyAnts[j].F;
+                sumF += Pop[colony_i].MyAnts[ant_i].F;
         
-            activ +=1;
-            sumF_franjo += Pop[colony_i].MyAnts[j].F_franjo;
-            }
-    }
-    // cout << "sumF= " <<sumF<< "\t"<< "active workers= " << activ << endl; 
-    Pop[colony_i].mean_F = sumF/activ;
-    Pop[colony_i].mean_F_franjo = sumF_franjo/activ; 
+                activ +=1;
 
+                sumF_franjo += Pop[colony_i].MyAnts[ant_i].F_franjo;
+            }
+        } // end for (unsigned int ant_i = 0; 
+
+        Pop[colony_i].mean_F = sumF/activ;
+        Pop[colony_i].mean_F_franjo = sumF_franjo/activ; 
     }
 }
 //------------------------------------------------------------------------------
 
+// calculate fitness
 void CalcFitness(Population & Pop, Params & Par)
-  {
-  sum_Fit = 0;
-  double total = 0;
+{
+    sum_Fit = 0;
+    double total = 0;
 
-  for (unsigned int i = 0; i<Pop.size(); i++)
-     {
-     Pop[i].idle = 0;
-     total = Pop[i].last_half_acts[0] + Pop[i].last_half_acts[1];
-     if (total == 0) Pop[i].fitness =0;
-     else if (total > 0)
-       Pop[i].fitness =  total * (pow((Pop[i].last_half_acts[0]/total), Par.beta_fit) * pow((Pop[i].last_half_acts[1]/total), Par.gama_fit));
+    for (unsigned int colony_i = 0; colony_i < Pop.size(); ++colony_i)
+    {
+        Pop[colony_i].idle = 0;
 
-     for (unsigned int j =0; j< Pop[i].MyAnts.size(); j++)
-       {
-       if (Pop[i].MyAnts[j].countacts [0] == 0 && Pop[i].MyAnts[j].countacts [1] == 0)
-         Pop[i].idle +=1;
-       }
-     }
+        total = Pop[colony_i].last_half_acts[0] 
+            + Pop[colony_i].last_half_acts[1];
 
-     int min_fit = Pop[0].ID;
-     for (unsigned int col=1; col< Pop.size(); col++)
+        if (total == 0)
         {
-        if (Pop[col].fitness < Pop[min_fit].fitness)
-                min_fit = col;
+            Pop[colony_i].fitness =0;
+        }
+        else if (total > 0)
+        {
+            Pop[colony_i].fitness =  total * 
+                pow((Pop[colony_i].last_half_acts[0]/total), Par.beta_fit) * 
+                pow((Pop[colony_i].last_half_acts[1]/total), Par.gamma_fit);
         }
 
-     for (unsigned int i = 0; i<Pop.size(); i++)
-	{
-        //cout << i <<"\t"<<  Pop[i].fitness << endl;
+        for (unsigned int ant_i = 0; 
+                ant_i < Pop[colony_i].MyAnts.size(); ++ant_i)
+        {
+            if (Pop[colony_i].MyAnts[ant_i].countacts[0] == 0 
+                    && Pop[colony_i].MyAnts[ant_i].countacts [1] == 0)
+            {
+                ++Pop[colony_i].idle;
+            }
+        }
+    }
+
+    int min_fit = Pop[0].ID;
+
+    for (unsigned int col = 1; col < Pop.size(); ++col)
+    {
+        if (Pop[col].fitness < Pop[min_fit].fitness)
+        {
+            min_fit = col;
+        }
+    }
+
+    for (unsigned int i = 0; i < Pop.size(); ++i)
+    {
         Pop[i].diff_fit = Pop[i].fitness - Pop[min_fit].fitness;
         sum_Fit += Pop[i].diff_fit;
-        }
-        //cout << "min fit " << min_fit << "\t"<< Pop[min_fit].fitness << endl;
-        //getch();
+    }
 
-     for (unsigned int i = 0; i<Pop.size(); i++)
+    for (unsigned int i = 0; i < Pop.size(); ++i)
+    {
+        Pop[i].rel_fit = Pop[i].diff_fit / sum_Fit;
+
+        if (i==0)
         {
-	Pop[i].rel_fit = Pop[i].diff_fit / sum_Fit;
-	if (i==0)
-		Pop[i].cum_fit = Pop[i].rel_fit;
-	else
-		Pop[i].cum_fit = Pop[i-1].cum_fit + Pop[i].rel_fit;
-
-    //    cout << "Colony " << i << " cum_fit = " << Pop[i].cum_fit << endl;
-	}
- // assert(Pop.back().cum_fit==1);
-
-  } // end of CalcFitness()
+            Pop[i].cum_fit = Pop[i].rel_fit;
+        }
+        else
+        {
+            Pop[i].cum_fit = Pop[i-1].cum_fit + Pop[i].rel_fit;
+        }
+    }
+} // end of CalcFitness()
 //-------------------------------------------------------------------------------
 
 void Categorize(Population & Pop)
