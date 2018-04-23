@@ -627,8 +627,11 @@ void Calc_F(Population & Pop, Params & Par)
             // calculate specialization values per ant
             if (totacts > 0) 
             {
+                // the probability to switch = switches / acts
                 C = double(Pop[colony_i].MyAnts[ant_i].switches) / 
                     Pop[colony_i].MyAnts[ant_i].workperiods;
+
+                // q in Duarte et al 2012 BES eq. (5) is 1 - C
 
                 Pop[colony_i].MyAnts[ant_i].F = 1.0 - 2.0*C;
                 Pop[colony_i].MyAnts[ant_i].F_franjo = 1.0 - C;
