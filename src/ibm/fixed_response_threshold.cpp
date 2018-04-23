@@ -7,7 +7,6 @@
 #include <cmath>
 #include <iostream>
 #include <stdlib.h>
-#include "random.h"
 #include <fstream>
 #include <cassert>
 #include <algorithm>
@@ -89,7 +88,7 @@ struct Colony
     double rel_fit; // fitness relative to whole population
     double cum_fit; //cumulative fitness
 
-    vector<double>HighF, LowF, CategF;
+    vector<double> HighF, LowF, CategF;
     vector<double> HighT, LowT, CategT1, CategT2;
     vector<double>mean_work_alloc;
     double mean_F;
@@ -226,13 +225,13 @@ void Inherit(Ant &Daughter, Ant &Mom, Ant &Dad, Params &Par)
     {
         // draw a random number designating the parent who is the one
         // who inherits the trait
-        int from_which_parent = gsl_rng_uniform_int(ran_gaussian, 2);
+        int from_which_parent = gsl_rng_uniform_int(rng_global, 2);
 
         // inherit from mom
         if (from_which_parent == 0)
         {
             // mutate 
-            if (gsl_rng_uniform(ran_gaussian) < Par.mutp)
+            if (gsl_rng_uniform(rng_global) < Par.mutp)
             {
                 Daughter.threshold[task] = Mom.threshold[task] 
                     + gsl_ran_gaussian(rng_global,1);
@@ -244,7 +243,7 @@ void Inherit(Ant &Daughter, Ant &Mom, Ant &Dad, Params &Par)
         }
         else // alternatively, inherit from dad
         {
-            if (Par.mutp > anynumber)
+            if (gsl_rng_uniform(rng_global) < Par.mutp)
             {
                 Daughter.threshold[task] = Dad.threshold[task] 
                     + gsl_ran_gaussian(rng_global,1);
@@ -292,7 +291,7 @@ void InitAnts(Ant & myAnt, Params & Par, Colony & myCol)
     }
     
     myAnt.last_act = Par.no_task; // set at a value of no task
-    myAnt.curr_act = 2; // 0 = task 1, 1 = task 2, 2 = idle
+    myAnt.curr_act = Par.tasks; // 0 = task 1, 1 = task 2, etc, n = idle
     myAnt.switches = 0; // set counter of switches to 0
     myAnt.workperiods=0;
     myAnt.F = 10;
@@ -431,7 +430,7 @@ cout << "chance to quit: " << Par.p << endl;
     // ant quits
     if (gsl_rng_uniform(rng_global) < Par.p)
     {
-        anyAnt.curr_act = 2;
+        anyAnt.curr_act = Par.tasks;
     }
 #ifndef SIMULTANEOUS_UPDATE  
     else
@@ -719,160 +718,185 @@ void CalcFitness(Population & Pop, Params & Par)
 } // end of CalcFitness()
 //-------------------------------------------------------------------------------
 
+// categorize for histogram
 void Categorize(Population & Pop)
-  {
-  for (unsigned int i=0; i<Pop.size(); i++)
-    {//creating bins
-    Pop[i].LowF[0] = -1;
-    Pop[i].HighF[0] = -0.9;
-    Pop[i].CategF[0] = 0;
-    Pop[i].LowT[0] = 0;
-    Pop[i].HighT[0] = 0.5;
-    Pop[i].CategT1[0] = 0;
-    Pop[i].CategT2[0]=0;
+{
+    for (unsigned int colony_i = 0; colony_i < Pop.size(); ++colony_i)
+    {   //creating bins
+        Pop[colony_i].LowF[0] = -1;
+        Pop[colony_i].HighF[0] = -0.9;
+        Pop[colony_i].CategF[0] = 0;
+        Pop[colony_i].LowT[0] = 0;
+        Pop[colony_i].HighT[0] = 0.5;
+        Pop[colony_i].CategT1[0] = 0;
+        Pop[colony_i].CategT2[0]=0;
 
-    for (unsigned int index = 1; index < Pop[i].HighF.size(); index++)
-      {
-      Pop[i].LowF[index] = Pop[i].LowF[index-1]+0.1;
-      Pop[i].HighF[index] = Pop[i].HighF[index-1]+0.1;
-      Pop[i].CategF[index] = 0;
-
-      Pop[i].LowT[index]= Pop[i].LowT[index-1]+0.5;
-      Pop[i].HighT[index] = Pop[i].HighT[index-1]+0.5;
-      Pop[i].CategT1[index] = 0;
-      Pop[i].CategT2[index] = 0;
-      }
-
-    Pop[i].LowF[10] = 0;
-    Pop[i].HighF[9] = 0;
-
-    // relative frequencies
-    if (Pop[i].MyAnts.size()-Pop[i].idle > 0)
-      {
-      for (unsigned int worker = 0; worker < Pop[i].MyAnts.size(); worker++)
+        for (unsigned int index = 1; index < Pop[colony_i].HighF.size(); index++)
         {
-       for (unsigned int index = 0; index < Pop[i].CategF.size(); index++)
-         {  // specialization
-         if (Pop[i].MyAnts[worker].F >= Pop[i].LowF[index]
-            && Pop[i].MyAnts[worker].F < Pop[i].HighF[index])
-            Pop[i].CategF[index] += 1/ ((Pop[i].MyAnts.size())-(Pop[i].idle));
+            Pop[colony_i].LowF[index] = Pop[colony_i].LowF[index-1]+0.1;
+            Pop[colony_i].HighF[index] = Pop[colony_i].HighF[index-1]+0.1;
+            Pop[colony_i].CategF[index] = 0;
 
-         //threshold 1
-     //    cout << Pop[i].MyAnts[worker].threshold[0] << endl;
-         if (Pop[i].MyAnts[worker].threshold[0] >= Pop[i].LowT[index]
-             && Pop[i].MyAnts[worker].threshold[0] < Pop[i].HighT[index])
+            Pop[colony_i].LowT[index]= Pop[colony_i].LowT[index-1]+0.5;
+            Pop[colony_i].HighT[index] = Pop[colony_i].HighT[index-1]+0.5;
+            Pop[colony_i].CategT1[index] = 0;
+            Pop[colony_i].CategT2[index] = 0;
+        }
+
+        // TODO
+        Pop[colony_i].LowF[10] = 0;
+        Pop[colony_i].HighF[9] = 0;
+
+        // relative frequencies
+        if (Pop[colony_i].MyAnts.size() - Pop[colony_i].idle > 0)
+        {
+            for (unsigned int worker = 0; 
+                    worker < Pop[colony_i].MyAnts.size(); ++worker)
             {
-             Pop[i].CategT1[index] += 1;
-            }
-         // threshold 2
-    //     cout << Pop[i].MyAnts[worker].threshold[1] << endl;
-         if (Pop[i].MyAnts[worker].threshold[1] >= Pop[i].LowT[index]
-             && Pop[i].MyAnts[worker].threshold[1] < Pop[i].HighT[index])
-            {
-             Pop[i].CategT2[index] += 1;
-            }
+                for (unsigned int index = 0; 
+                        index < Pop[colony_i].CategF.size(); ++index)
+                {
+                    // specialization
+                    if (Pop[colony_i].MyAnts[worker].F >= Pop[colony_i].LowF[index]
+                            && Pop[colony_i].MyAnts[worker].F < Pop[colony_i].HighF[index])
+                    {
+                        Pop[colony_i].CategF[index] += 1.0/(
+                                (Pop[colony_i].MyAnts.size())-(Pop[colony_i].idle)
+                                );
+                    }
 
-         }   // for category
-        } // for worker
-      } // end if
+                    //threshold 1
+                    if (Pop[colony_i].MyAnts[worker].threshold[0] >= 
+                            Pop[colony_i].LowT[index]
+                        && 
+                        Pop[colony_i].MyAnts[worker].threshold[0] < 
+                            Pop[colony_i].HighT[index])
+                    {
+                        ++Pop[colony_i].CategT1[index];
+                    }
 
-
-
-
-  double sum=0;
-    for (unsigned int index = 0; index < Pop[i].CategF.size(); index++)
-      {
-      sum +=Pop[i].CategT1[index];
-     // cout << Pop[i].LowT[index] << "\t" << Pop[i].HighT[index] << endl;
-      }
-    //  cout << sum << endl;
+                    // threshold 2
+                    if (Pop[colony_i].MyAnts[worker].threshold[1] >= 
+                            Pop[colony_i].LowT[index]
+                        && 
+                        Pop[colony_i].MyAnts[worker].threshold[1] < 
+                        Pop[colony_i].HighT[index])
+                    {
+                        ++Pop[colony_i].CategT2[index];
+                    }
+                }  // for category
+            } // for worker
+        } // end if
     }// end of for colony
-  } // end of CategorizeF()
+} // end of CategorizeF()
 
 //------------------------------------------------------------------------------
 
+// draw a parent from the cumulative distribution
 int drawParent(int nCol, Population & Pop)
 {
-const double draw = Uniform(); // random number
-int cmin=-1, cmax=nCol-1;
+    const double draw = gsl_rng_uniform(rng_global); 
 
-while (cmax - cmin != 1)
-	{
-	int cmid = (cmax+cmin)/2 ;
-	if (draw < Pop[cmid].cum_fit) cmax = cmid;
-	else cmin = cmid;
-	}
-return cmax;
+    int cmin = -1;
+    int cmax = nCol - 1;
+
+    // binary search of cumulative fitness value
+    while (cmax - cmin != 1)
+    {
+        int cmid = (cmax+cmin)/2;
+        if (draw < Pop[cmid].cum_fit)
+        {
+            cmax = cmid;
+        }
+        else
+        {
+            cmin = cmid;
+        }
+    }
+    return cmax;
 }// end of drawParent()
 //----------------------------------------------------------------------------------------------------
 
 void MakeSexuals(Population & Pop, Params & Par)
 {
- mySexuals.resize(2 * Par.Col); // number of sexuals needed
- parentCol.resize(mySexuals.size());
+    mySexuals.resize(2 * Par.Col); // number of sexuals needed
+    parentCol.resize(mySexuals.size());
 
- for (unsigned int ind = 0; ind < mySexuals.size(); ind ++)
-	{
+    for (unsigned int ind = 0; ind < mySexuals.size(); ++ind)
+    {
         //initialize sexuals
         mySexuals[ind].threshold.resize(Par.tasks);
-        //mySexuals[ind].act.resize(NULL);
-        mySexuals[ind].countacts.resize(NULL);
-        mySexuals[ind].last_act = NULL;
-        mySexuals[ind].curr_act = NULL;
-        mySexuals[ind].switches = NULL;
-        mySexuals[ind].F =NULL;
+
+        mySexuals[ind].countacts.resize(0);
+        mySexuals[ind].last_act = Par.tasks;
+        mySexuals[ind].curr_act = Par.tasks;
+        mySexuals[ind].switches = Par.tasks;
+        mySexuals[ind].F = 0;
         mySexuals[ind].mated = false;
+
         // draw a parent colony for each sexual
-	parentCol[ind] = drawParent(Pop.size(), Pop);
-      //	cout << "Sexual " << ind << " is by col " << parentCol[ind] << endl;
+        parentCol[ind] = drawParent(Pop.size(), Pop);
 
-	Inherit(mySexuals[ind], Pop[parentCol[ind]].queen, Pop[parentCol[ind]].male, Par);
+        Inherit(mySexuals[ind], 
+                Pop[parentCol[ind]].queen, 
+                Pop[parentCol[ind]].male, 
+                Par);
 
-	}
+    }
 }
+
+
 //-------------------------------------------------------------------------------------------
+
+// make the colonies
 void MakeColonies(Population &Pop, Params &Par)
 {
-int mother, father;
+    int mother, father;
 
-for (unsigned int col = 0; col < Pop.size(); col++)
-	{
-	do
-	{
-	mother = RandomNumber(mySexuals.size());
-	father = RandomNumber(mySexuals.size()) ;
-	}	while
-		(mother == father || mySexuals[mother].mated==true || mySexuals[father].mated==true);
-	mySexuals[mother].mated = true;
-	mySexuals[father].mated = true;
+    for (unsigned int col = 0; col < Pop.size(); ++col)
+    {
+        do
+        {
+            mother = gsl_rng_uniform_int(rng_global, mySexuals.size());
+            father = gsl_rng_uniform_int(rng_global, mySexuals.size());
+        }
+        while (mother == father || 
+                mySexuals[mother].mated || 
+                mySexuals[father].mated);
 
-	Pop[col].queen = mySexuals[mother]; Pop[col].male = mySexuals[father]; // copy new males and females
+        mySexuals[mother].mated = true;
+        mySexuals[father].mated = true;
 
-	} // end for Colonies
+        Pop[col].queen = mySexuals[mother]; 
+        Pop[col].male = mySexuals[father]; // copy new males and females
 
-
+    } // end for Colonies
 } // end MakeColonies()
 //-----------------------------------------------------------------------------------------------------
 
+// function to sort vector elements
 bool compare_vector_elements(vector<int>anyvector, int size_vector)
 {
- bool mybool;   
- for (int m = 0; m < size_vector-1; m++) 
-            {
-                for (int n = m+1; n<size_vector; n++)
-                    {
-                    if (anyvector[m] == anyvector[n])
-                        {
-                        mybool=false;
-                    
-                   //     cout << anyvector[m] << " = " << anyvector[n] << endl;
-                        break;
-                        }
-                    else mybool=true;
-                    }
-            }
+    bool mybool=false;
 
-return mybool;
+    for (int m = 0; m < size_vector-1; ++m) 
+    {
+        for (int n = m+1; n < size_vector; ++n)
+        {
+            if (anyvector[m] == anyvector[n])
+            {
+                mybool=false;
+            
+                break;
+            }
+            else
+            {
+                mybool=true;
+            }
+        }
+    }
+
+    return(mybool);
 }
 
 //------------------------------------------------------------------------------------------------------
@@ -882,9 +906,11 @@ int main(int argc, char* argv[])
 {
     Params myPars;
 
-    ifstream inp("params.txt");
+    ifstream inp("params_fx.txt");
 
     myPars.InitParams(inp);
+
+    ShowParams(myPars);
 
     // set up the random number generators
     // (from the gnu gsl library)
@@ -893,211 +919,172 @@ int main(int argc, char* argv[])
     rng_global = gsl_rng_alloc(T);
     gsl_rng_set(rng_global, myPars.seed);
     
-static ofstream out; 
-static ofstream out2;
-static ofstream out3;
-static ofstream out4;
+    static ofstream out; 
+    static ofstream out2;
+    static ofstream out3;
+    static ofstream out4;
 
-if(myPars.Col>1) 
+    if(myPars.Col>1) 
     {
-    out.open("data_work_alloc.txt");
-    out3.open("stimulus_acts.txt");
-    
-    out << "Gen" << "\t" << "Col"  << "\t" << "NumActs1" << "\t" << "NumActs2" <<
-	"\t" << "WorkAlloc1" << "\t" << "WorkAlloc2" <<"\t" << "Idle"<< "\t" << "Fitness" <<endl; 
+        out.open("data_work_alloc.txt");
+        out3.open("stimulus_acts.txt");
+        
+        out << "Gen" << "\t" << "Col"  << "\t" << "NumActs1" << "\t" << "NumActs2" <<
+        "\t" << "WorkAlloc1" << "\t" << "WorkAlloc2" <<"\t" << "Idle"<< "\t" << "Fitness" <<endl; 
 
-    out3 << "Gen" << ";" << "Time" << ";" << "Col" << ";" << "Stim1" << ";" << "Stim2" << ";" << "Workers1" << ";" << "Workers2" << ";" << "Fitness" << endl;
+        out3 << "Gen" << ";" << "Time" << ";" << "Col" << ";" << "Stim1" << ";" << "Stim2" << ";" << "Workers1" << ";" << "Workers2" << ";" << "Fitness" << endl;
     }
-    
-    
-else 
+    else 
     {
-    out4.open("data_1gen.txt");
+        out4.open("data_1gen.txt");
 
-    out4 << "Time" << ";" << "Col" << ";" << "Stim1" << ";" << "Stim2" << ";" << "Workers1" << ";" << "Workers2" << ";" << "Fitness" << ";" 
-         << "Mean_F" << ";" << "Mean_F_franjo" << endl;
+        out4 << "Time" << ";" << "Col" << ";" << "Stim1" << ";" << "Stim2" << ";" << "Workers1" << ";" << "Workers2" << ";" << "Fitness" << ";" 
+             << "Mean_F" << ";" << "Mean_F_franjo" << endl;
     } 
 
-out2.open("threshold_distribution.txt");
+    out2.open("threshold_distribution.txt");
     
     
-SetSeed(myPars.seed);
+    //headers for data
+    Population MyColonies;
+    InitFounders(MyColonies, myPars);
 
-//headers for data
-Population MyColonies;
-InitFounders(MyColonies, myPars);
+    for (int g = 0; g < myPars.maxgen; ++g)
+    {
+        Init(MyColonies, myPars);
+        
+        double equil_steps=0;
 
-for (int g= 0; g<myPars.maxgen; g++)
-{
-//cout << "Generation " << g << endl;
-
-Init(MyColonies, myPars);
-//cout<< "Colonies initialized" << endl;
-double equil_steps=0;
-
-// pick ten random colonies
-
-vector<int>random_colonies(10);
+        // pick ten random colonies
+        vector<int>random_colonies(10);
 
 #ifdef DEBUG
-cout << MyColonies.size() <<endl;
-cout <<myPars.maxtime << endl;
-
+    cout << MyColonies.size() <<endl;
+    cout <<myPars.maxtime << endl;
 #endif
-/*
-vector<int>colnumbers(MyColonies.size());
-for (unsigned col =0; col<MyColonies.size(); col++)
-    colnumbers[col]=col;
 
-if (g>= 40 && g<=60)
-	{
-    random_shuffle(colnumbers.begin(),colnumbers.end());
-    int start = RandomNumber(colnumbers.size()-random_colonies.size());
-    
-	for (unsigned int rcol = 0; rcol < random_colonies.size(); rcol++)        
-		    random_colonies[rcol] = colnumbers[start+rcol];
-//	for (unsigned int rcol = 0; rcol < random_colonies.size(); rcol++)
-//		    cout << "Random colonies " << random_colonies[rcol] << endl;
-    
-    }
-*/
-
-for (int k = 0; k < myPars.maxtime; k++)
-    {
-    //cout << "Time step" << k << "\t";
-
-    UpdateAnts(MyColonies, myPars);
-    /*
-    if (g>=40 && g<=60 && myPars.Col>1 )
-	    {
-	    for (unsigned int rcol = 0; rcol < random_colonies.size(); rcol++)
-		    {
-		    out3 << g << ";" << k << ";" << random_colonies[rcol] << ";" ; 
-		     for (int task=0; task<myPars.tasks; task++)
-                out3 << MyColonies[random_colonies[rcol]].stim[task] << ";"; 
-		     for (int task=0; task<myPars.tasks; task++)
-	            out3 << MyColonies[random_colonies[rcol]].workfor[task]/myPars.alfa[task] << ";";
-             out3 << MyColonies[random_colonies[rcol]].fitness << endl;	     
-		    }
-	    }
-    */
-
-
-    UpdateStim(MyColonies, myPars);
-   
-    if (k >= myPars.maxtime/2)
-    	{
-		for (unsigned int col = 0; col < MyColonies.size(); col++)
-			{
-            for (int task=0; task<myPars.tasks; task++) 
-                MyColonies[col].last_half_acts[task] += MyColonies[col].workfor[task]/myPars.alfa[task];
-			}	
-        }
-	
-    
-    if(k >= myPars.maxtime-51) //calculate work allocation for the last fifty timesteps
+        // work in the ecological timescale
+        for (int k = 0; k < myPars.maxtime; ++k)
         {
-		equil_steps +=1;
-         for (unsigned int col = 0; col < MyColonies.size(); col++)
-	        {
-		    for (int task=0; task<myPars.tasks; task++)
-                MyColonies[col].mean_work_alloc[task]+=MyColonies[col].workfor[task]/myPars.alfa[task];
-	        }
-
-	    }
-	
-    
-    Calc_F(MyColonies, myPars);
-    if (k == myPars.maxtime-1)
-         {
-         CalcFitness(MyColonies, myPars);
-        // Categorize(MyColonies);
-	  
-         
-         if ((g<=100 || g%10==0) && myPars.Col>1)
+            UpdateAnts(MyColonies, myPars);
+            UpdateStim(MyColonies, myPars);
+       
+            if (k >= myPars.maxtime/2)
             {
-            //cout <<  "Generation " << g << endl;
-            for (unsigned int col = 0; col < MyColonies.size(); col++)
+                for (unsigned int col = 0; col < MyColonies.size(); ++col)
                 {
+                    for (int task=0; task<myPars.tasks; ++task)
+                    {
+                        MyColonies[col].last_half_acts[task] += 
+                            MyColonies[col].workfor[task]/myPars.alfa[task];
+                    }
+                }	
+            }
 
-		        for (int task=0; task<myPars.tasks; task++)
-                    MyColonies[col].mean_work_alloc[task]/=equil_steps;
-                    
-                out << g << "\t" << col << "\t"; 
-		        for (int task=0; task<myPars.tasks; task++)
-                    out << MyColonies[col].numacts[task] << "\t";
+            //calculate work allocation for the last fifty timesteps
+            if (k >= myPars.maxtime-51) 
+            {
+                equil_steps +=1;
 
-		        for (int task=0; task<myPars.tasks; task++)
-                    out << MyColonies[col].mean_work_alloc[task] << "\t"; 
-		        
-		        out << "\t" << MyColonies[col].idle << "\t" << MyColonies[col].fitness << endl; 
-	           // output only thresholds of foundresses and mean specialization 
-			    out2 << g << ";";
-		            for (int task=0; task<myPars.tasks; task++)
-				        out2 << MyColonies[col].male.threshold[task] << ";"; 
-		            for (int task=0; task<myPars.tasks; task++)
-				        out2 << MyColonies[col].queen.threshold[task] << ";"; 
-                    out2 << MyColonies[col].mean_F <<";"<< MyColonies[col].mean_F_franjo << endl;
-	    	        }
+                for (unsigned int col = 0; col < MyColonies.size(); col++)
+                {
+                    for (int task=0; task<myPars.tasks; task++)
+                    {
+                        MyColonies[col].mean_work_alloc[task] += 
+                            MyColonies[col].workfor[task]/myPars.alfa[task];
+                    }
                 }
             }
-         
+        
+            Calc_F(MyColonies, myPars);
 
-     // one colony only
-   if (myPars.Col==1)
-    {
-    for (unsigned int col = 0; col < MyColonies.size(); col++)
+            if (k == myPars.maxtime-1)
             {
-                out4 << k << ";" << col << ";"; 
-		        for (int task=0; task<myPars.tasks; task++)
-		            out4 <<MyColonies[col].stim[task] << ";"; 
-		        for (int task=0; task<myPars.tasks; task++)
-	                out4 << MyColonies[col].workfor[task]/myPars.alfa[task] << ";";
-	            out4 << MyColonies[col].fitness << ";" << MyColonies[col].mean_F << ";" << MyColonies[col].mean_F_franjo << endl;	     
-                
-                for (unsigned int ind = 0; ind < MyColonies[col].MyAnts.size(); ind++)
-	    	        {
-			        out2 << g << ";";
-		            for (int task=0; task<myPars.tasks; task++)
-				        out2 << MyColonies[col].MyAnts[ind].threshold[task] << ";"; 
-                    out2 << MyColonies[col].MyAnts[ind].F << ";"<< MyColonies[col].MyAnts[ind].F_franjo <<endl;
-	    	        }
+                CalcFitness(MyColonies, myPars);
+
+                if ((g <= 100 || g % 10 == 0) && myPars.Col > 1)
+                {
+                    for (unsigned int col = 0; col < MyColonies.size(); ++col)
+                    {
+                        for (int task = 0; task < myPars.tasks; ++task)
+                        {
+                            MyColonies[col].mean_work_alloc[task]/=equil_steps;
+                        }
+
+                        out << g << "\t" << col << "\t"; 
+
+                        for (int task = 0; task < myPars.tasks; ++task) 
+                        {
+                            out << MyColonies[col].numacts[task] << "\t";
+                        }
+
+                        for (int task = 0; task < myPars.tasks; ++task)
+                        {
+                            out << MyColonies[col].mean_work_alloc[task] << "\t"; 
+                        }
+
+                        out << "\t" << MyColonies[col].idle << 
+                            "\t" << MyColonies[col].fitness << endl; 
+                        
+                        // output only thresholds of foundresses and mean specialization 
+                        out2 << g << ";";
+
+                        for (int task=0; task<myPars.tasks; ++task)
+                        {
+                            out2 << MyColonies[col].male.threshold[task] << ";"; 
+                        }
+
+                        for (int task=0; task<myPars.tasks; ++task)
+                        {
+                            out2 << MyColonies[col].queen.threshold[task] << ";"; 
+                        }
+
+                        out2 << MyColonies[col].mean_F <<";" 
+                            << MyColonies[col].mean_F_franjo << endl;
+                    }
+                } // if (g<=100...
             }
-    }
+             
+            // one colony only
+            if (myPars.Col == 1)
+            {
+                for (unsigned int col = 0; col < MyColonies.size(); ++col)
+                {
+                    out4 << k << ";" << col << ";"; 
 
-   /*  // average colonies
-    double mean_work1, mean_work2;
-    double mean_stim1, mean_stim2;
-    double sum_work1 = 0; double sum_work2 = 0;
-    double sum_stim1 = 0; double sum_stim2=0;
-    for (unsigned int i = 0; i<MyColonies.size(); i++)
-          {
-          sum_work1 += MyColonies[i].workfor1/myPars.alfa1;
-          sum_work2 += MyColonies[i].workfor2/myPars.alfa2;
-          sum_stim1 += MyColonies[i].stim1;
-          sum_stim2 += MyColonies[i].stim2;
-          }
-    mean_work1 = sum_work1/MyColonies.size();
-    mean_work2 = sum_work2/MyColonies.size();
-    mean_stim1 = sum_stim1/MyColonies.size();
-    mean_stim2 = sum_stim2/MyColonies.size();
-   */ 
-   /*
-    out << g << "\t" << k << "\t"  << mean_work1 << "\t"
-          << mean_work2 << "\t" << mean_stim1 << "\t"
-          << mean_stim2  << endl;
-    */
-    }
+                    for (int task=0; task<myPars.tasks; ++task)
+                    {
+                        out4 <<MyColonies[col].stim[task] << ";"; 
+                    }
 
-MakeSexuals(MyColonies, myPars);
-MakeColonies(MyColonies, myPars);
+                    for (int task=0; task<myPars.tasks; ++task)
+                    {
+                        out4 << MyColonies[col].workfor[task]/myPars.alfa[task] << ";";
+                    }
 
-}
+                    out4 << MyColonies[col].fitness << ";" 
+                        << MyColonies[col].mean_F << ";" 
+                        << MyColonies[col].mean_F_franjo << endl;	     
+                    
+                    for (unsigned int ind = 0; ind < MyColonies[col].MyAnts.size(); ++ind)
+                    {
+                        out2 << g << ";";
 
-//cout << "done!" << endl;
+                        for (int task=0; task<myPars.tasks; ++task)
+                        {
+                            out2 << MyColonies[col].MyAnts[ind].threshold[task] << ";"; 
 
-}
-//---------------------------------------------------------------------------
+                            out2 << MyColonies[col].MyAnts[ind].F << ";" 
+                                << MyColonies[col].MyAnts[ind].F_franjo <<endl;
+                        }
+                    }
+                }
+            }
+        } // for (int k = 0; k < myPars.maxtime; ++k)
 
+        // now make sexuals and new colonies
+        MakeSexuals(MyColonies, myPars);
+        MakeColonies(MyColonies, myPars);
 
-
+    } // end for (int g = 0; g < myPars.maxgen; ++g)
+} // end main

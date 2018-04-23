@@ -1,11 +1,16 @@
-all : xreinforcedRT xreadhisto
+all : xfixed_response xreinforcedRT xreadhisto
+
+xfixed_response : fixed_response_threshold.cpp
+	g++ -Wall -O3 -o xfixed_response fixed_response_threshold.cpp -lgsl -lgslcblas
 
 xreinforcedRT : reinforcedRT_ExpEnhPerf_stepsize.cpp
 	g++ -Wall -O3 -o xreinforcedRT reinforcedRT_ExpEnhPerf_stepsize.cpp -fopenmp -lgsl -lgslcblas 
+
 xreadhisto : read_histograms.cpp
 	g++ -Wall -ggdb -O3 -o xreadhisto read_histograms.cpp -lm -lrt -lgsl -lgslcblas
 
 clean :
+	rm -rf xfixed_response
 	rm -rf xreinforcedRT
 	rm -rf xreadhisto
 
