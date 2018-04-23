@@ -435,7 +435,7 @@ void UpdateStimPerAnt(Params & Par, Colony & anyCol, Ant & anyAnt, int task)
 }
 //------------------------------------------------------------------------------
 
-// 
+// check whether an ant is going to quit
 void QuitTask(Colony & anyCol, Ant & anyAnt, int job, Params & Par)
 {
 #ifdef DEBUG
@@ -443,10 +443,8 @@ cout << "Quitting tasks" << endl;
 cout << "chance to quit: " << Par.p << endl;
 #endif
 
-    double q = gsl_rng_uniform(rng_global);
-
     // ant quits
-    if (q <= Par.p)
+    if (gsl_rng_uniform(rng_global) < Par.p)
     {
         anyAnt.curr_act = 2;
     }
@@ -459,14 +457,19 @@ cout << "chance to quit: " << Par.p << endl;
 }
 
 //------------------------------------------------------------------------------
-double RPfunction (double t, double s) // response probability
+
+// response probability
+double RPfunction (double t, double s) 
 {
     double RP;
-    if (t > 0.00)
+
+    if (t > 0.00) 
     {
+        // positive threshold, calculate 
+        // response according to Bonabeau et al eq 1
         RP = s*s / ((s*s)+(t*t));
     }
-    else if (s >0.00000)
+    else if (s > 0.00000)
     {
         RP = 1.0; // if threshold is zero, then probability of acting is 1.  
     }
@@ -475,15 +478,18 @@ double RPfunction (double t, double s) // response probability
         RP=0.0;
     }
     
-  return RP;
+    return(RP);
 }
+
+
 //-------------------------------------------------------------------------------
+
+// an ant chooses a certain task to perform
 void TaskChoice(Params & Par, Colony & anyCol, Ant & anyAnt)
 { 
-   int job =  RandomNumber(Par.tasks);  // prob to meet one of two tasks is random
-   double q = Uniform();
-   
-
+    // prob to meet one of two tasks is random
+    int job =  gsl_rng_uniform_int(rng_global, Par.tasks);  
+       
 #ifdef DEBUG 
    cout << "Choosing tasks" << endl; 
     assert(Par.tasks==2);
@@ -491,154 +497,104 @@ void TaskChoice(Params & Par, Colony & anyCol, Ant & anyAnt)
     assert(anyAnt.threshold[job]>=0);
 #endif
 
-#ifdef SIMULTANEOUS_UPDATE 
-    if (q <= RPfunction(anyAnt.threshold[job],anyCol.stim[job])) 
-        {
-             //cout << "Blah" << endl;
-		     anyAnt.curr_act = job; 
-             anyAnt.workperiods +=1; 
-             //cout << "Ant is doing " << anyAnt.curr_act << endl; 
-         } else anyAnt.curr_act=2;
-#endif
+    // ant chooses to perform the randomly chosen job
+    if (gsl_rng_uniform(rng_global) < 
+            RPfunction(anyAnt.threshold[job],anyCol.stim[job])) 
+    {
+        anyAnt.curr_act = job; 
+        anyAnt.workperiods += 1; 
 
 #ifndef SIMULTANEOUS_UPDATE 
-    if (q <= RPfunction(anyAnt.threshold[job],anyCol.stim[job])) 
-        {
-             //cout << "Blah" << endl;
-		     anyAnt.curr_act = job; 
-             anyAnt.workperiods +=1; 
-             UpdateStimPerAnt(Par, anyCol, anyAnt, job);
-             //cout << "Ant is doing " << anyAnt.curr_act << endl; 
-         } else anyAnt.curr_act=2;
+         UpdateStimPerAnt(Par, anyCol, anyAnt, job);
 #endif
-    
-    /*   
-   switch (job)
-     {
-     case 0: if (q <= RPfunction(anyAnt.threshold[job],anyCol.stim[job])) 
-	     {
-		     anyAnt.curr_act = job; anyAnt.workperiods +=1; 
-             } else anyAnt.curr_act=2;
-             break;  // she engages in task
-     case 1: if (q <= RPfunction(anyAnt.threshold[job],anyCol.stim2)) 
-	     {
-		     anyAnt.curr_act = job; anyAnt.workperiods +=1; 
-	     } else anyAnt.curr_act=2;
-             break;
-     } 
-*/
-   /*
-   if (anyAnt.act[job]) //update current job and workperiods if ant is active
-   	{ 
-	anyAnt.curr_act = job;
-	anyAnt.workperiods +=1;
-	}
-   else anyAnt.curr_act = 2; //ant is idle
-   */
 
-  } // end of TaskChoice()
+    } 
+    else //randomly encountered task not chosen, ant stays idle
+    {
+        anyAnt.curr_act=2;
+    }
+} // end of TaskChoice()
 //-------------------------------------------------------------------------------------------------
 
+// update all ants of the colony
 void UpdateAnts(Population & Pop, Params & Par)
-  {
-  //cout << "updating ants" << endl;
-#ifdef DEBUG
-cout << Pop.size() << endl;
-#endif
-   for (unsigned int i = 0; i<Pop.size(); i++)
-     {
-     for (int task =0; task<Par.tasks; task++)
-         Pop[i].workfor[task]=0; // reset work for tasks
-     
-     for (unsigned int j = 0; j<Pop[i].MyAnts.size(); j++)  //actives may quit, idle may work
+{
+    for (unsigned int colony_i = 0; colony_i < Pop.size(); ++colony_i)
+    {
+        for (int task = 0; task < Par.tasks; ++task)
         {
-        //cout << j << " of "<< Pop[i].MyAnts.size() << " workers " << endl;
-        if(Pop[i].MyAnts[j].curr_act!=2)//if ant active 
-            {
-            Pop[i].MyAnts[j].last_act = Pop[i].MyAnts[j].curr_act; //record last act
-            QuitTask(Pop[i], Pop[i].MyAnts[j], Pop[i].MyAnts[j].curr_act, Par); // wanna quit?
-            }
-        else TaskChoice(Par, Pop[i], Pop[i].MyAnts[j]); //if inactive, choose a task 
-        
-        //update number of switches after choosing tasks
-        if(Pop[i].MyAnts[j].curr_act!=2)//if ant active 
-            {
-            Pop[i].numacts[Pop[i].MyAnts[j].curr_act] += 1;
-            Pop[i].MyAnts[j].countacts[Pop[i].MyAnts[j].curr_act] += 1;
-            Pop[i].workfor[Pop[i].MyAnts[j].curr_act] += Par.alfa[Pop[i].MyAnts[j].curr_act]; // update the work done for that task 
-            if (Pop[i].MyAnts[j].last_act!=7 && Pop[i].MyAnts[j].last_act != Pop[i].MyAnts[j].curr_act)
-                Pop[i].MyAnts[j].switches+=1;
-            }
-        
-/*        
-        switch (Pop[i].MyAnts[j].curr_act)
-        	{
-		    case 0: if (Pop[i].MyAnts[j].last_act == 1) Pop[i].MyAnts[j].switches += 1; break;
-
-		    case 1: if (Pop[i].MyAnts[j].last_act==0) Pop[i].MyAnts[j].switches +=1; break; 
-        	
-	        case 2: break;
-		    }		
-*/
+            // reset work for tasks
+            Pop[colony_i].workfor[task] = 0; 
         }
-     }
-  }  // end of UpdateAnts()
+
+        for (unsigned int ant_i = 0; 
+                ant_i < Pop[colony_i].MyAnts.size(); ++ant_i)  //actives may quit, idle may work
+        {
+            //if ant active 
+            if (Pop[colony_i].MyAnts[ant_i].curr_act < Par.tasks)
+            {
+                //record last act
+                Pop[colony_i].MyAnts[ant_i].last_act = 
+                    Pop[colony_i].MyAnts[ant_i].curr_act; 
+                
+                // wanna quit?
+                QuitTask(Pop[colony_i], Pop[colony_i].MyAnts[ant_i], Pop[colony_i].MyAnts[ant_i].curr_act, Par); 
+            }
+    else TaskChoice(Par, Pop[colony_i], Pop[colony_i].MyAnts[ant_i]); //if inactive, choose a task 
+
+    //update number of switches after choosing tasks
+    if(Pop[colony_i].MyAnts[ant_i].curr_act!=2)//if ant active 
+        {
+        Pop[colony_i].numacts[Pop[colony_i].MyAnts[ant_i].curr_act] += 1;
+        Pop[colony_i].MyAnts[ant_i].countacts[Pop[colony_i].MyAnts[ant_i].curr_act] += 1;
+        Pop[colony_i].workfor[Pop[colony_i].MyAnts[ant_i].curr_act] += Par.alfa[Pop[colony_i].MyAnts[ant_i].curr_act]; // update the work done for that task 
+        if (Pop[colony_i].MyAnts[ant_i].last_act!=7 && Pop[colony_i].MyAnts[ant_i].last_act != Pop[colony_i].MyAnts[ant_i].curr_act)
+            Pop[colony_i].MyAnts[ant_i].switches+=1;
+        }
+
+    /*        
+    switch (Pop[colony_i].MyAnts[ant_i].curr_act)
+        {
+        case 0: if (Pop[colony_i].MyAnts[ant_i].last_act == 1) Pop[colony_i].MyAnts[ant_i].switches += 1; break;
+
+        case 1: if (Pop[colony_i].MyAnts[ant_i].last_act==0) Pop[colony_i].MyAnts[ant_i].switches +=1; break; 
+        
+        case 2: break;
+        }		
+    */
+    }
+    }
+}  // end of UpdateAnts()
 //------------------------------------------------------------------------------
 
-void UpdateStim(Population & Pop, Params & Par)   // stimulus changes const increase
-  {
-  //cout << "updating stimulus" << endl;
-  for (unsigned int i = 0; i<Pop.size(); i++)
-     {
-     /*
-     Pop[i].workfor1 = 0;
-     Pop[i].workfor2 = 0;
-
-     for (unsigned int j = 0; j<Pop[i].MyAnts.size(); j++)
+// update the stimuli
+void UpdateStim(Population & Pop, Params & Par)   
+{
+    // go through all colonies
+    for (unsigned int i = 0; i < Pop.size(); ++i)
+    {
+        // update the stimulus for each task
+        for (int task = 0; task < Par.tasks; ++task)
         {
-        
-	assert(Pop[i].MyAnts[j].curr_act >= 0 || Pop[i].MyAnts[j].curr_act < 3);
-        switch (Pop[i].MyAnts[j].curr_act)
-		{
-		case 0: { 	
-                        Pop[i].workfor1 += Par.alfa1;
-                        Pop[i].numacts[0]+= 1;
-          		Pop[i].MyAnts[j].countacts[0] += 1;
-			} break;
-			
-		case 1: {
- 			Pop[i].workfor2 += Par.alfa2;
-          		Pop[i].numacts[1] +=1;
-          		Pop[i].MyAnts[j].countacts[1] +=1;
-			} break;
+            // calculate new stimulus level
+            Pop[i].newstim[task] = Pop[i].stim[task] 
+                + Par.delta[task];
 
-		case 2: break;
-		}
-	*/
 #ifdef SIMULTANEOUS_UPDATE
-    for (int task=0; task<Par.tasks; task++)
-        { // maximum number of generations
-            
-        Pop[i].newstim[task] = Pop[i].stim[task] + Par.delta[task] - (Par.beta[task]*Pop[i].stim[task]) - (Pop[i].workfor[task]/Par.N) ; 
-        Pop[i].stim[task] = Pop[i].newstim[task];
-
-        if (Pop[i].stim[task] < 0) Pop[i].stim[task] =0;
-        }
+            Pop[i].newstim[task] -= (Pop[i].workfor[task]/Par.N);
 #endif
 
-#ifndef SIMULTANEOUS_UPDATE
-    for (int task=0; task<Par.tasks; task++)
-        {
-            
-        Pop[i].newstim[task] = Pop[i].stim[task] + Par.delta[task] - (Par.beta[task]*Pop[i].stim[task]) ; 
-        Pop[i].stim[task] = Pop[i].newstim[task];
+            // update the stimulus
+            Pop[i].stim[task] = Pop[i].newstim[task];
 
-        if (Pop[i].stim[task] < 0) Pop[i].stim[task] =0;
+            if (Pop[i].stim[task] < 0)
+            {
+                Pop[i].stim[task] = 0;
+            }
         }
-#endif
-
     }
-  } // end UpdateStim()
+}
+
 //------------------------------------------------------------------------------
 
 void Calc_F(Population & Pop, Params & Par)
