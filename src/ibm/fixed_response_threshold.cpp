@@ -335,7 +335,6 @@ void Init(Population & Pop, Params & Par)
         assert(Pop[i].workfor.empty());
 
         // erase any existing fitness data
-        if (!Pop[i].workfor.empty())
         if (!Pop[i].last_half_acts.empty()) 
         {
             Pop[i].last_half_acts.erase(
