@@ -915,6 +915,8 @@ int main(int argc, char* argv[])
 
     ShowParams(myPars);
 
+	cout << "thank god it is Friday";
+
     // set up the random number generators
     // (from the gnu gsl library)
     gsl_rng_env_setup();
