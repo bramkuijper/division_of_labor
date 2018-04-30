@@ -1,6 +1,6 @@
 
 // with stimulus update per ant, or per timestep (see define)
-// With Nick Tucker's annotations (24/04/2018)
+// With Nick Tucker's annotations (30/04/2018)
 //---------------------------------------------------------------------------
 
 #include <vector>
