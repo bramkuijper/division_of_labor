@@ -27,7 +27,6 @@ struct Params
 	int randommax; //Maximum value of positive random number
 	int seed;
   double delta;
-  double e;
  
  //Function to read in parameters via stream
  istream & InitParams(istream & inp);
@@ -71,8 +70,8 @@ void Stochsine(Params & Par)
 		+ Par.B * 
     
     //Random number between 0 and randdommax
-    gsl_rng_uniform_pos(gsl_rng) * Par.randommax;
-};
+    gsl_rng_uniform_pos(rng_global) * Par.randommax;
+}
 
 int main()
 {
@@ -91,6 +90,16 @@ int main()
 	gsl_rng_set(rng_global, myPars.seed);
 
 	// Run the formula
+	Stochsine(myPars);
+
+	// Print delta
+		cout << "Delta: " << myPars.delta << endl;
+   // Run the formula
+	Stochsine(myPars);
+
+	// Print delta
+		cout << "Delta: " << myPars.delta << endl;
+   // Run the formula
 	Stochsine(myPars);
 
 	// Print delta
