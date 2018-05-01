@@ -1,6 +1,7 @@
 
 // with stimulus update per ant, or per timestep (see define)
-// With Nick Tucker's annotations (30/04/2018)
+// 01/05/2018 With foundations for stochsine function (ctrl+F: //stochsine).
+// Still need to insert somewhere in Updatestim, and remove delta from the params file
 //---------------------------------------------------------------------------
 
 #include <vector>
@@ -37,6 +38,15 @@ struct Params
     int maxgen;
     double beta_fit, gamma_fit;
     int seed;
+	
+	//stochsine
+	//double A; //Deterministic factor
+	//double B; //Stochastic factor
+	//int genspercycle; //Generations per environmental cycle
+	//int randommax; //Maximum value of positive random number
+	//int gensdone; //Generations completed
+	//int stepsdone; //Timesteps completed in current generation
+	//double delta
 
     int no_task; // number indicating that the current task
                     // is no task
@@ -142,7 +152,14 @@ istream & Params::InitParams(istream & in)
         maxgen >> // maximum number of generations
         beta_fit >> // fitness weights
         gamma_fit >> // fitness weights
-        seed;
+		
+		//stochsine			 
+		//A >> //Deterministic factor
+		//B >> //Stochastic factor
+		//genspercycle >> //Generations per environmental cycle
+		//randommax >> //Maximum value of positive random number
+		
+		seed;
 
     // set a number which indicates that ants are currently 
     // working on no task at all
@@ -180,6 +197,16 @@ void ShowParams(Params & Par)
      cout << "Max gen " <<  Par.maxgen << endl;
      cout << "Exp task 1 " <<  Par.beta_fit << endl;
      cout << "Exp task 2 " <<  Par.gamma_fit << endl;
+
+	 //stochsine
+	 //cout << "Deterministic Factor " << Par.A << endl;
+	 //cout << "Stochastic Factor " << Par.B << endl;
+	 //cout << "Generations per Cycle " << Par.genspercycle << endl;
+	 //cout << "Maximum Random Number " << Par.randommax << endl;
+
+	 cout << "Seed " << Par.seed << endl;
+
+
      cout << "seed " << Par.seed << endl;
 }
 //-----------------------------------------------------------------------------
@@ -557,7 +584,27 @@ void UpdateAnts(Population & Pop, Params & Par)
 }  // end of UpdateAnts()
 //------------------------------------------------------------------------------
 
-// Increases the stimulus as a regular, constant increase (delta)
+//stochsine
+//Creates value for delta with a stochastic sine wave (Botero et al. 2015)
+//void Stochsine(Params & Par)
+//{
+//Par.delta = Par.A  * sin((2 *
+
+	//pi
+	//3.14159265358979323846 *
+
+	//Calculate cumulative timesteps
+	//((Par.maxtime*Par.gensdone) + Par.stepsdone)
+
+	//) / Par.maxtime* Par.genspercycle)
+	//+ Par.B *
+
+	//Random number between 0 and randdommax
+	//gsl_rng_uniform_pos(rng_global) * Par.randommax;
+//}
+
+
+// Increases the stimulus by delta
 // Decreases the stimulus depending on the amount of work done towards a task
 // (MSc Project note: this is where we might implement environmental change)
 void UpdateStim(Population & Pop, Params & Par)   
@@ -969,6 +1016,9 @@ int main(int argc, char* argv[])
         for (int k = 0; k < myPars.maxtime; ++k)
         {
             UpdateAnts(MyColonies, myPars);
+			//stochsine
+			//Par.gensdone = g;
+			//Par.stepsdone = k;
             UpdateStim(MyColonies, myPars);
        
             if (k >= myPars.maxtime/2)
