@@ -17,15 +17,17 @@ gsl_rng_type const * T; // gnu scientific library rng type
 gsl_rng *rng_global; // gnu scientific rng 
 
 //Definining parameters
-struct params
+struct Params
 {
-	int A; //Deterministic factor
-	int B; //Stochastic factor
+	double A; //Deterministic factor
+	double B; //Stochastic factor
 	int maxtime; //timesteps per generation
 	int t; //Cumulative timesteps
 	int genspercycle; //Generations per environmental cycle
 	int randommax; //Maximum value of positive random number
 	int seed;
+  double delta;
+  double e;
  
  //Function to read in parameters via stream
  istream & InitParams(istream & inp);
@@ -58,20 +60,18 @@ void ShowParams(Params & Par)
 };
 
 // Performs stochastic sine equation (Botero et al. 2015)
-void Stochsine(Params &Par)
+void Stochsine(Params & Par)
 {
-	delta = Par.A  * sin((2 *
+	Par.delta = Par.A  * sin((2 *
 
 		//pi
 		3.14159265358979323846
 
-		* Par.t) / Par.maxtime* genspercycle)
-
-		+ Par.B *
-
-		//Random number between 0 and randommax
-		gsl_rng_uniform_int(rng_global, randommax++);
-	
+		* Par.t) / Par.maxtime* Par.genspercycle)
+		+ Par.B * 
+    
+    //Random number between 0 and randdommax
+    gsl_rng_uniform_pos(gsl_rng) * Par.randommax;
 };
 
 int main()
@@ -91,10 +91,10 @@ int main()
 	gsl_rng_set(rng_global, myPars.seed);
 
 	// Run the formula
-	Stochsine(Params &Par);
+	Stochsine(myPars);
 
 	// Print delta
-		cout << "Delta: " << delta << endl;
+		cout << "Delta: " << myPars.delta << endl;
 
 	return 0;
 }
