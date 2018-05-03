@@ -22,12 +22,12 @@ struct Params
 	double A; //Deterministic factor
 	double B; //Stochastic factor
 	int maxtime; //timesteps per generation
-	int t; //Cumulative timesteps
 	int genspercycle; //Generations per environmental cycle
 	int randommax; //Maximum value of positive random number
 	int seed;
   double delta;
-  double e;
+  int gensdone = 0; //Generations completed
+  int stepsdone = 0; //Timesteps completed in current generation
  
  //Function to read in parameters via stream
  istream & InitParams(istream & inp);
@@ -40,7 +40,6 @@ istream & Params::InitParams(istream & in)
 	in >> A //Deterministic factor
 		>> B //Stochastic factor
 		>> maxtime //timesteps per generation
-		>> t //Cumulative timesteps
 		>> genspercycle //Generations per environmental cycle
 		>> randommax //Maximum value of positive random number
 		>> seed;
@@ -53,7 +52,6 @@ void ShowParams(Params & Par)
 	cout << "Deterministic Factor " << Par.A << endl;
 	cout << "Stochastic Factor " << Par.B << endl;
 	cout << "Timesteps per Generation " << Par.maxtime << endl;
-	cout << "Timesteps Elapsed " << Par.t << endl;
 	cout << "Generations per Cycle " << Par.genspercycle << endl;
 	cout << "Maximum Random Number " << Par.randommax << endl;
 	cout << "Seed " << Par.seed << endl;
@@ -65,19 +63,20 @@ void Stochsine(Params & Par)
 	Par.delta = Par.A  * sin((2 *
 
 		//pi
-		3.14159265358979323846
-
-		* Par.t) / Par.maxtime* Par.genspercycle)
+		3.14159265358979323846 * 
+    
+    //Calculate cumulative timesteps
+    ((Par.maxtime*Par.gensdone)+Par.stepsdone)
+    
+    ) / Par.maxtime* Par.genspercycle)
 		+ Par.B * 
     
     //Random number between 0 and randdommax
     gsl_rng_uniform_pos(rng_global) * Par.randommax;
-};
+}
 
 int main()
 {
-	cout << "Hello, World!";
-
 	//Load up the parameters and print them
 	Params myPars;
 	ifstream inp("env_params.txt");
@@ -87,6 +86,7 @@ int main()
 	// set up the random number generators from the gnu gsl library
 	gsl_rng_env_setup();
 	T = gsl_rng_default;
+ 
 	rng_global = gsl_rng_alloc(T);
 	gsl_rng_set(rng_global, myPars.seed);
 

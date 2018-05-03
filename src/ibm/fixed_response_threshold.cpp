@@ -1,6 +1,6 @@
 
 // with stimulus update per ant, or per timestep (see define)
-// With Nick Tucker's annotations (30/04/2018)
+// 02/05/2018 With stochsine function (ctrl+F: //stochsine).
 //---------------------------------------------------------------------------
 
 #include <vector>
@@ -37,13 +37,21 @@ struct Params
     int maxgen;
     double beta_fit, gamma_fit;
     int seed;
+	
+	//stochsine
+	double A; //Deterministic factor
+	double B; //Stochastic factor
+	int genspercycle; //Generations per environmental cycle
+	int randommax; //Maximum value of positive random number
+	int gensdone; //Generations completed
+	int stepsdone; //Timesteps completed in current generation
+	double delta;
 
     int no_task; // number indicating that the current task
                     // is no task
 
     // vectors containing stimulus parameters
     vector<double> meanT; // mean thresholds
-    vector<double> delta; // stimulus increase
     vector<double> alfa; // stimulus decrease due to work
 
     // function to read in the parameters from stream
@@ -123,13 +131,6 @@ istream & Params::InitParams(istream & in)
         meanT.push_back(tmp);
     }
 
-    // read in the baseline increases per stimulus
-    for (int i=0; i<tasks; i++) 
-    {    
-        in >> tmp ; 
-        delta.push_back(tmp);
-    }
-
     // read in the stimulus decrease parameters
     for (int i=0; i<tasks; i++)
     {
@@ -142,7 +143,14 @@ istream & Params::InitParams(istream & in)
         maxgen >> // maximum number of generations
         beta_fit >> // fitness weights
         gamma_fit >> // fitness weights
-        seed;
+		
+		//stochsine			 
+		A >> //Deterministic factor
+		B >> //Stochastic factor
+		genspercycle >> //Generations per environmental cycle
+		randommax >> //Maximum value of positive random number
+		
+		seed;
 
     // set a number which indicates that ants are currently 
     // working on no task at all
@@ -166,11 +174,6 @@ void ShowParams(Params & Par)
      
      for (int task=0; task<Par.tasks; task++)
      {
-        cout << "Delta " <<task <<"\t"  << Par.delta[task] << endl;
-     }
-     
-     for (int task=0; task<Par.tasks; task++)
-     {
         cout << "effic " << task << "\t" << Par.alfa[task] << endl;
      }
      
@@ -180,7 +183,14 @@ void ShowParams(Params & Par)
      cout << "Max gen " <<  Par.maxgen << endl;
      cout << "Exp task 1 " <<  Par.beta_fit << endl;
      cout << "Exp task 2 " <<  Par.gamma_fit << endl;
-     cout << "seed " << Par.seed << endl;
+
+	   //stochsine
+	   cout << "Deterministic Factor A " << Par.A << endl;
+	   cout << "Stochastic Factor B " << Par.B << endl;
+	   cout << "Generations per Cycle " << Par.genspercycle << endl;
+	   cout << "Maximum Random Number " << Par.randommax << endl;
+
+	   cout << "Seed " << Par.seed << endl;
 }
 //-----------------------------------------------------------------------------
 
@@ -557,11 +567,34 @@ void UpdateAnts(Population & Pop, Params & Par)
 }  // end of UpdateAnts()
 //------------------------------------------------------------------------------
 
-// Increases the stimulus as a regular, constant increase (delta)
+//stochsine
+//Creates value for delta with a stochastic sine wave (Botero et al. 2015)
+void Stochsine(Params & Par)
+{
+Par.delta = Par.A  * sin((2 *
+
+	//pi
+	3.14159265358979323846 *
+
+	//Calculate cumulative timesteps
+	((Par.maxtime*Par.gensdone) + Par.stepsdone)
+
+	) / Par.maxtime* Par.genspercycle)
+	+ Par.B *
+
+	//Random number between 0 and randdommax
+	gsl_rng_uniform_pos(rng_global) * Par.randommax;
+}
+
+
+// Increases the stimulus by delta
 // Decreases the stimulus depending on the amount of work done towards a task
-// (MSc Project note: this is where we might implement environmental change)
 void UpdateStim(Population & Pop, Params & Par)   
 {
+
+	//stochsine
+	Stochsine(Par);
+
     // go through all colonies
     for (unsigned int colony_i = 0; colony_i < Pop.size(); ++colony_i)
     {
@@ -570,7 +603,7 @@ void UpdateStim(Population & Pop, Params & Par)
         {
             // calculate new stimulus level
             Pop[colony_i].newstim[task] = Pop[colony_i].stim[task] 
-                + Par.delta[task];
+                + Par.delta;
 
 #ifdef SIMULTANEOUS_UPDATE
             Pop[colony_i].newstim[task] -= (Pop[colony_i].workfor[task]/Par.N);
@@ -969,6 +1002,9 @@ int main(int argc, char* argv[])
         for (int k = 0; k < myPars.maxtime; ++k)
         {
             UpdateAnts(MyColonies, myPars);
+			//stochsine
+			myPars.gensdone = g;
+			myPars.stepsdone = k;
             UpdateStim(MyColonies, myPars);
        
             if (k >= myPars.maxtime/2)
