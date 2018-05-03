@@ -71,7 +71,7 @@ void Stochsine(Params & Par)
 		+ Par.B * 
     
     //Random number between 0 and randdommax
-    gsl_rng_uniform_pos(gsl_rng) * Par.randommax;
+    gsl_rng_uniform_pos(rng_global) * Par.randommax;
 };
 
 int main()

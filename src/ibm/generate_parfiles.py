@@ -20,12 +20,16 @@ class RunGenerator:
 
     # all parameters to generate jobfiles
     # for the Carson HPC cluster
-    email = "alwk201@exeter.ac.uk"
+    email = ""
     batch_dir_prefix = "hpcbatch"
     job_file_prefix = "hpcjob"
     job_file_postfix = ".qsub"
     run_dir_prefix = "core"
-    runtime_mins = 800 
+    runtime_mins = 800
+
+    # after one has printed the value of a parameter
+    # print a semicolon and then a label of the parameter
+    print_param_key = False
 
     # TODO 
     # make destination directory clearer
@@ -41,7 +45,8 @@ class RunGenerator:
     def __init__(self, 
             all_run_combinations, 
             dest_dir,
-            exe):
+            exe,
+            email):
 
         # store all possible combinations of parameters
         self.all_runs = all_run_combinations
@@ -58,6 +63,12 @@ class RunGenerator:
         # copied
         self.exe = Path(exe)
         assert(self.exe.exists())
+
+        self.email = email
+
+        if not email:
+            print("please provide the email address")
+            sys.exit(1)
 
     # generate a batch directory with all folders
     # which contain runs and executables
@@ -81,13 +92,13 @@ class RunGenerator:
         batch_dir = self.dest_dir / batch_dir_name
         batch_dir.mkdir()
 
+        print("Creating " + str(batch_dir))
+
 
         core_number = 0
 
         # ok, make several replicates
         for replicate in range(0,nrep):
-
-            print(replicate)
 
             # loop through all rows and generate the folders
             for rownum, row in self.all_runs.iterrows():
@@ -128,6 +139,7 @@ class RunGenerator:
         job_name = re.sub(str(batch_dir),"/","_slash_") + "_job_" + \
                 str(run_folder_number)
 
+
         # create the start of the jobfile
         job_file_content = "#!/bin/sh\n" \
                 + "#$ -N " + job_name + "\n" \
@@ -160,10 +172,13 @@ class RunGenerator:
         # first generate the contents of the file
         file_contents = ""
 
-        print(param_data)
-
         for param_key, param_value in param_data.iteritems():
-            file_contents += str(param_value) + ";" + param_key + "\n"
+
+            if self.print_param_key:
+                file_contents += str(param_value) + ";" + param_key + "\n"
+            else:
+                file_contents += str(param_value) + "\n"
+
 
         # create the parameter file
         # as a subdirectory of the run folder:
@@ -189,8 +204,30 @@ def expand_grid(data_dict):
         columns=data_dict.keys(),
         dtype=object))
 
-maxtime = 3000 
+
+
+
+####################################
+#  GENERATE PARAMETER FILES
+####################################
+
+# 1. this program will make a directory in your homedir
+# called hpcbatch_date_time
+# 2. within this directory there are folders called core_X containing
+# the executable files of the Xth run of the simulation
+# all executables are put in separate folders so that datafiles
+# of a run are not overwritten by a simultaneous runa
+# 3. the hpcbatch_date_time also contains jobfiles, called
+# hpcjob_data_time_X. Each of these jobfiles contains the 
+# instructions for the cluster to run one single job
+# 
+
+maxtime = 3000
+
 # make a dictionary of all the parameters
+# parameters are listed in order of appearance
+# if you want to have multiple parameter values for a single
+# parameter, just add them to the list, i.e., parameter1 = [ value1, value2, ..., valuen ]
 pardict = {
         "N": [50], # number of workers / colony
         "Col": [50], # number of colonies
@@ -224,9 +261,12 @@ pardict = {
         "K" : [0.15]
 }
 
+# make all parameter combinations
+# this can be left alone
 all_combinations = expand_grid(pardict)
 
-
+# add a column with random numbers representing the seed
+# this can be left alone
 all_combinations["seed"] = np.random.randint(
         low = 0, 
         high = 2147483646,
@@ -234,11 +274,15 @@ all_combinations["seed"] = np.random.randint(
 
 
 # make an instance of the rungenerator class
+# change stuff here
 rg = RunGenerator(
         all_run_combinations = all_combinations, 
-        dest_dir="/home/bram/",
-        exe="xreinforcedRT",
+        dest_dir=str(Path.home()), # put hpcbatch in home directory
+        exe="xreinforcedRT", # SET THE EXECUTABLE HERE
+        email="a.l.w.kuijper@exeter.ac.uk"
         )
 
-# generate the batch
-rg.generate_batch(nrep=4)
+# generate the batch with the number of replicates per batch
+# if you just want a single replicate for each parameter combination
+# nrep=1 should do it
+rg.generate_batch(nrep=1)
