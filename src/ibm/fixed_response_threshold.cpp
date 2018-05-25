@@ -941,7 +941,7 @@ int main(int argc, char* argv[])
 {
     Params myPars;
 
-    ifstream inp("params_fx.txt");
+    ifstream inp("params.txt");
 
     myPars.InitParams(inp);
 

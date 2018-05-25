@@ -12,6 +12,7 @@ import datetime
 import shutil
 import re
 import sys
+from collections import OrderedDict
 import pandas as pd
 import numpy as np
 from pathlib import Path
@@ -36,7 +37,7 @@ class RunGenerator:
     # make destination directory clearer
         
     # some path necessary to compile stuff 
-    ld_path = "/cm/shared/apps/gsl/gcc/1.16/lib"
+    ld_path = "/cm/shared/apps/gsl/2.3/lib:/cm/local/apps/gcc/7.2.0/lib"
 
     param_file_name = "params.txt"
 
@@ -174,12 +175,11 @@ class RunGenerator:
         file_contents = ""
 
         for param_key, param_value in param_data.iteritems():
-
+            
             if self.print_param_key:
                 file_contents += str(param_value) + ";" + param_key + "\n"
             else:
                 file_contents += str(param_value) + "\n"
-
 
         # create the parameter file
         # as a subdirectory of the run folder:
@@ -229,28 +229,31 @@ maxtime = 3000
 # parameters are listed in order of appearance
 # if you want to have multiple parameter values for a single
 # parameter, just add them to the list, i.e., parameter1 = [ value1, value2, ..., valuen ]
-pardict = {
-        "N": [100], # number of workers / colony
-        "Col": [10], # number of colonies
-        "maxtime": [100], # time steps work is performed before reproduction
-        "meanT1" : [ 5.0 ], # mean threshold for each task
-        "meanT2" : [ 5.0 ], # mean threshold for each task
-        "alfa1" : [ 3.0 ], # maximum work efficiency task 1
-        "alfa2" : [ 3.0 ], # maximum work efficiency task 1
-        "p": [0.2], # quitting probability
-        "mutp" : [0.01], # mutation probability
-        "maxgen" : [5], # number of generations 
-        "beta_fit" : [0.5], # exponent task 1 
-        "gamma_fit" : [0.5], # exponent task 2 
-        "A" : [0, 0.5, 1], #Deterministic factor
-        "B" : [0, 0.5, 1], #Stochastic factor  
-        "genspercycle" : [5], #Generations per environmental cycle      
-        "randommax" : [10], #Maximum value of positive random number
-}
+pardict = OrderedDict()
+
+pardict["N"]= 100 # number of workers / colony
+pardict["Col"]= 10 # number of colonies
+pardict["maxtime"]= 100 # time steps work is performed before reproduction
+pardict["meanT1"]= 5.0  # mean threshold for each task
+pardict["meanT2"]= 5.0  # mean threshold for each task
+pardict["alfa1"]= 3.0  # maximum work efficiency task 1
+pardict["alfa2"]= 3.0  # maximum work efficiency task 1
+pardict["p"]= 0.2 # quitting probability
+pardict["mutp"]=0.01 # mutation probability
+pardict["maxgen"]=5 # number of generations 
+pardict["beta_fit"]=0.5 # exponent task 1 
+pardict["gamma_fit"]=0.5 # exponent task 2 
+pardict["A"]=[0, 0.5, 1] #Deterministic factor
+pardict["B"]=[0, 0.5, 1] #Stochastic factor  
+pardict["genspercycle"]=5 #Generations per environmental cycle      
+pardict["randommax"]=10 #Maximum value of positive random number
+
+print(pardict.keys())
 
 # make all parameter combinations
 # this can be left alone
 all_combinations = expand_grid(pardict)
+
 
 # add a column with random numbers representing the seed
 # this can be left alone
@@ -259,13 +262,12 @@ all_combinations["seed"] = np.random.randint(
         high = 2147483646,
         size = all_combinations.shape[0])
 
-
 # make an instance of the rungenerator class
 # change stuff here
 rg = RunGenerator(
         all_run_combinations = all_combinations, 
         dest_dir=str(Path.home()), # put hpcbatch in home directory
-        exe="xreinforcedRT", # SET THE EXECUTABLE HERE
+        exe="xfixed_response", # SET THE EXECUTABLE HERE
         email="ngt206@exeter.ac.uk"
         )
 
