@@ -6,6 +6,7 @@
 
 
 # import some libraries first
+import math
 import itertools
 import datetime
 import shutil
@@ -229,36 +230,22 @@ maxtime = 3000
 # if you want to have multiple parameter values for a single
 # parameter, just add them to the list, i.e., parameter1 = [ value1, value2, ..., valuen ]
 pardict = {
-        "N": [50], # number of workers / colony
-        "Col": [50], # number of colonies
-        "maxtime": [maxtime], # time steps work is performed before reproduction
-        "meanT1" : [ 10.0 ], # mean threshold for each task
-        "meanT2" : [ 10.0 ], # mean threshold for each task
-        "delta1" : [ 1.0 ], # mean threshold for each task
-        "delta2" : [ 1.0 ], # mean threshold for each task
-        "alpha_max_1" : [ 10 ], # maximum work efficiency task 1
-        "alpha_max_2" : [ 10 ], # maximum work efficiency task 1
-        "alpha_min_1" : [ 3.0 ], # minimum work efficiency task 1
-        "alpha_min_2" : [ 3.0 ], # minimum work efficiency task 1
-        "beta_1" : [ 0 ], # stimulus decay task 1
-        "beta_2" : [ 0 ], # stimulus decay task 2 
-        "p": [1], # quitting probability
+        "N": [100], # number of workers / colony
+        "Col": [10], # number of colonies
+        "maxtime": [100], # time steps work is performed before reproduction
+        "meanT1" : [ 5.0 ], # mean threshold for each task
+        "meanT2" : [ 5.0 ], # mean threshold for each task
+        "alfa1" : [ 3.0 ], # maximum work efficiency task 1
+        "alfa2" : [ 3.0 ], # maximum work efficiency task 1
+        "p": [0.2], # quitting probability
         "mutp" : [0.01], # mutation probability
-        "maxgen" : [10000], # number of generations 
+        "maxgen" : [5], # number of generations 
         "beta_fit" : [0.5], # exponent task 1 
         "gamma_fit" : [0.5], # exponent task 2 
-        "recomb" : [0.5], # recombination rate
-        "timecost" : [0], # duration-dependent switching cost
-        "mutstep" : [0.1], # standard deviation of mutational distribution
-        "initStim" : [0.3], # initial level of the stimulus
-        "p_wait" : [0.1], # probability that ant has to wait c time steps before switching
-        "tau" : [int(0.5 * maxtime)], # 
-        "initForget" : [0], # 
-        "initLearn" : [0], # 
-        "step_gain_exp" : [0.2], # 
-        "step_lose_exp" : [0.2], # 
-        "threshold_noise" : [1.0], # 
-        "K" : [0.15]
+        "A" : [0, 0.5, 1], #Deterministic factor
+        "B" : [0, 0.5, 1], #Stochastic factor  
+        "genspercycle" : [5], #Generations per environmental cycle      
+        "randommax" : [10], #Maximum value of positive random number
 }
 
 # make all parameter combinations
@@ -279,7 +266,7 @@ rg = RunGenerator(
         all_run_combinations = all_combinations, 
         dest_dir=str(Path.home()), # put hpcbatch in home directory
         exe="xreinforcedRT", # SET THE EXECUTABLE HERE
-        email="a.l.w.kuijper@exeter.ac.uk"
+        email="ngt206@exeter.ac.uk"
         )
 
 # generate the batch with the number of replicates per batch

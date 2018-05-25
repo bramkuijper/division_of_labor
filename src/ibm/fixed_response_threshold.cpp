@@ -117,7 +117,7 @@ istream & Params::InitParams(istream & in)
     tasks = 2;    
 
     // read in population size
-    in >> N >>
+    in >> N >> // number of workers
         Col >> // number of colonies
         maxtime;  // number of timesteps work is being done
                     // during each evolutionary generation
