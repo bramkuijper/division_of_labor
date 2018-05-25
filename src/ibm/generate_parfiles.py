@@ -279,7 +279,7 @@ rg = RunGenerator(
         all_run_combinations = all_combinations, 
         dest_dir=str(Path.home()), # put hpcbatch in home directory
         exe="xreinforcedRT", # SET THE EXECUTABLE HERE
-        email="a.l.w.kuijper@exeter.ac.uk"
+        email="a.l.w.kuijper@exeter.ac.uk" # SET YOUR EMAIL HERE
         )
 
 # generate the batch with the number of replicates per batch
