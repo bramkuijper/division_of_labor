@@ -117,7 +117,7 @@ istream & Params::InitParams(istream & in)
     tasks = 2;    
 
     // read in population size
-    in >> N >>
+    in >> N >> // number of workers
         Col >> // number of colonies
         maxtime;  // number of timesteps work is being done
                     // during each evolutionary generation
@@ -941,7 +941,7 @@ int main(int argc, char* argv[])
 {
     Params myPars;
 
-    ifstream inp("params_fx.txt");
+    ifstream inp("params.txt");
 
     myPars.InitParams(inp);
 

@@ -6,11 +6,13 @@
 
 
 # import some libraries first
+import math
 import itertools
 import datetime
 import shutil
 import re
 import sys
+from collections import OrderedDict
 import pandas as pd
 import numpy as np
 from pathlib import Path
@@ -35,7 +37,7 @@ class RunGenerator:
     # make destination directory clearer
         
     # some path necessary to compile stuff 
-    ld_path = "/cm/shared/apps/gsl/gcc/1.16/lib"
+    ld_path = "/cm/shared/apps/gsl/2.3/lib:/cm/local/apps/gcc/7.2.0/lib"
 
     param_file_name = "params.txt"
 
@@ -173,12 +175,11 @@ class RunGenerator:
         file_contents = ""
 
         for param_key, param_value in param_data.iteritems():
-
+            
             if self.print_param_key:
                 file_contents += str(param_value) + ";" + param_key + "\n"
             else:
                 file_contents += str(param_value) + "\n"
-
 
         # create the parameter file
         # as a subdirectory of the run folder:
@@ -191,6 +192,16 @@ class RunGenerator:
     # make all possible combinations of parameter values
     # see http://pandas.pydata.org/pandas-docs/version/0.14/cookbook.html#creating-example-data 
 def expand_grid(data_dict):
+
+    pardict = {"hulu":[100,50],"ho":[30,20]}
+
+    # calculate total product of data frame
+    rows = itertools.product(*pardict.values())
+
+    print(data_dict)
+
+
+    print(data_dict.values())
 
     # calculate total product of data frame
     rows = itertools.product(*data_dict.values())
@@ -228,42 +239,30 @@ maxtime = 3000
 # parameters are listed in order of appearance
 # if you want to have multiple parameter values for a single
 # parameter, just add them to the list, i.e., parameter1 = [ value1, value2, ..., valuen ]
-pardict = {
-        "N": [50], # number of workers / colony
-        "Col": [50], # number of colonies
-        "maxtime": [maxtime], # time steps work is performed before reproduction
-        "meanT1" : [ 10.0 ], # mean threshold for each task
-        "meanT2" : [ 10.0 ], # mean threshold for each task
-        "delta1" : [ 1.0 ], # mean threshold for each task
-        "delta2" : [ 1.0 ], # mean threshold for each task
-        "alpha_max_1" : [ 10 ], # maximum work efficiency task 1
-        "alpha_max_2" : [ 10 ], # maximum work efficiency task 1
-        "alpha_min_1" : [ 3.0 ], # minimum work efficiency task 1
-        "alpha_min_2" : [ 3.0 ], # minimum work efficiency task 1
-        "beta_1" : [ 0 ], # stimulus decay task 1
-        "beta_2" : [ 0 ], # stimulus decay task 2 
-        "p": [1], # quitting probability
-        "mutp" : [0.01], # mutation probability
-        "maxgen" : [10000], # number of generations 
-        "beta_fit" : [0.5], # exponent task 1 
-        "gamma_fit" : [0.5], # exponent task 2 
-        "recomb" : [0.5], # recombination rate
-        "timecost" : [0], # duration-dependent switching cost
-        "mutstep" : [0.1], # standard deviation of mutational distribution
-        "initStim" : [0.3], # initial level of the stimulus
-        "p_wait" : [0.1], # probability that ant has to wait c time steps before switching
-        "tau" : [int(0.5 * maxtime)], # 
-        "initForget" : [0], # 
-        "initLearn" : [0], # 
-        "step_gain_exp" : [0.2], # 
-        "step_lose_exp" : [0.2], # 
-        "threshold_noise" : [1.0], # 
-        "K" : [0.15]
-}
+pardict = OrderedDict()
+
+pardict["N"]=[ 100] # number of workers / colony
+pardict["Col"]=[ 10] # number of colonies
+pardict["maxtime"]=[ 100] # time steps work is performed before reproduction
+pardict["meanT1"]=[ 5.0 ] # mean threshold for each task
+pardict["meanT2"]=[ 5.0 ] # mean threshold for each task
+pardict["alfa1"]=[ 3.0 ] # maximum work efficiency task 1
+pardict["alfa2"]=[ 3.0 ] # maximum work efficiency task 1
+pardict["p"]=[ 0.2] # quitting probability
+pardict["mutp"]=[0.01] # mutation probability
+pardict["maxgen"]=[5] # number of generations 
+pardict["beta_fit"]=[0.5] # exponent task 1 
+pardict["gamma_fit"]=[0.5] # exponent task 2 
+pardict["A"]=[0, 0.5, 1] #Deterministic factor
+pardict["B"]=[0, 0.5, 1] #Stochastic factor  
+pardict["genspercycle"]=[5] #Generations per environmental cycle      
+pardict["randommax"]=[10] #Maximum value of positive random number
+
 
 # make all parameter combinations
 # this can be left alone
 all_combinations = expand_grid(pardict)
+
 
 # add a column with random numbers representing the seed
 # this can be left alone
@@ -272,14 +271,13 @@ all_combinations["seed"] = np.random.randint(
         high = 2147483646,
         size = all_combinations.shape[0])
 
-
 # make an instance of the rungenerator class
 # change stuff here
 rg = RunGenerator(
         all_run_combinations = all_combinations, 
         dest_dir=str(Path.home()), # put hpcbatch in home directory
-        exe="xreinforcedRT", # SET THE EXECUTABLE HERE
-        email="a.l.w.kuijper@exeter.ac.uk" # SET YOUR EMAIL HERE
+        exe="xfixed_response", # SET THE EXECUTABLE HERE
+        email="ngt206@exeter.ac.uk"
         )
 
 # generate the batch with the number of replicates per batch
