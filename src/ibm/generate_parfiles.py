@@ -193,15 +193,9 @@ class RunGenerator:
     # see http://pandas.pydata.org/pandas-docs/version/0.14/cookbook.html#creating-example-data 
 def expand_grid(data_dict):
 
-    pardict = {"hulu":[100,50],"ho":[30,20]}
+    for key, value in data_dict.items():
+        assert(type(value) is type([]))
 
-    # calculate total product of data frame
-    rows = itertools.product(*pardict.values())
-
-    print(data_dict)
-
-
-    print(data_dict.values())
 
     # calculate total product of data frame
     rows = itertools.product(*data_dict.values())
