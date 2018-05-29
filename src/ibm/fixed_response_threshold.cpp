@@ -984,7 +984,7 @@ int main(int argc, char* argv[])
     Population MyColonies;
     InitFounders(MyColonies, myPars);
 
-    for (int g = 0; g < myPars.maxgen; ++g)
+    for (int g = 0; g <= myPars.maxgen; ++g)
     {
         Init(MyColonies, myPars);
         
