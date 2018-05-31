@@ -965,7 +965,7 @@ int main(int argc, char* argv[])
         out3.open("stimulus_acts.txt");
         
         out << "Gen" << "\t" << "Col"  << "\t" << "NumActs1" << "\t" << "NumActs2" <<
-        "\t" << "WorkAlloc1" << "\t" << "WorkAlloc2" <<"\t" << "Idle"<< "\t" << "Fitness" <<endl; 
+        "\t" << "WorkAlloc1" << "\t" << "WorkAlloc2" <<"\t" << "Idle"<< "\t" << "Fitness" << "\t" << "Mean_F" << "\t" << "Mean_F_franjo" <<endl; 
 
         out3 << "Gen" << ";" << "Time" << ";" << "Col" << ";" << "Stim1" << ";" << "Stim2" << ";" << "Workers1" << ";" << "Workers2" << ";" << "Fitness" << endl;
     }
@@ -1063,7 +1063,10 @@ int main(int argc, char* argv[])
                         }
 
                         out << "\t" << MyColonies[col].idle << 
-                            "\t" << MyColonies[col].fitness << endl; 
+                            "\t" << MyColonies[col].fitness << 
+                            "\t" << MyColonies[col].mean_F <<
+                            "\t" << MyColonies[col].mean_F_franjo << endl;
+                 
                         
                         // output only thresholds of foundresses and mean specialization 
                         out2 << g << ";";
@@ -1080,6 +1083,7 @@ int main(int argc, char* argv[])
 
                         out2 << MyColonies[col].mean_F <<";" 
                             << MyColonies[col].mean_F_franjo << endl;
+                            
                     }
                 } // if (g<=100...
             }
