@@ -967,7 +967,7 @@ int main(int argc, char* argv[])
         out << "Gen" << "\t" << "Col"  << "\t" << "NumActs1" << "\t" << "NumActs2" <<
         "\t" << "WorkAlloc1" << "\t" << "WorkAlloc2" <<"\t" << "Idle"<< "\t" << "Fitness" << "\t" << "Mean_F" << "\t" << "Mean_F_franjo" <<endl; 
 
-        out3 << "Gen" << ";" << "Time" << ";" << "Col" << ";" << "Stim1" << ";" << "Stim2" << ";" << "Workers1" << ";" << "Workers2" << ";" << "Fitness" << endl;
+        out3 << "Gen" << ";" << "Time" << ";" << "Col" << ";" << "Stim1" << ";" << "Workers1" << ";" << "Stim2" << ";" << "Workers2" << ";" << "Fitness" << endl;
     }
     else 
     {
@@ -1033,9 +1033,43 @@ int main(int argc, char* argv[])
                     }
                 }
             }
+            
 			
-			// Calculates fitness, categorises ants into low/high threshold categories, giving them as an output
+			// Calculates fitness, categorises ants 
+            // into low/high threshold categories, giving them as an output
             Calc_F(MyColonies, myPars);
+
+
+
+            // write the values of the stimulus levels for each colony 
+            // to "stimulus_acts.txt"
+            //
+            // only output stimulus every nth timestep to prevent datafiles becoming
+            // massive. If you want to output it every timestep, set
+            // k % 1
+            if (k % 10 == 0 && myPars.Col > 1)
+            {
+                // loop through colonies
+                for (unsigned int col = 0; col < MyColonies.size(); ++col)
+                {
+                    // write generation, timestep and colonynumber to file
+                    out3 << g << ";" 
+                        << k << ";" 
+                        << col << ";";
+
+                    // write stimulus levels and worker numbers to file
+                    for (int task = 0; task < myPars.tasks; ++task)
+                    {
+                        out3 << MyColonies[col].stim[task] << ";"
+                                << MyColonies[col].workfor[task] << ";";
+                    }
+
+                    // calculate colony level fitness and write that to a file
+                    out3 << MyColonies[col].fitness << endl;
+                }
+
+            } // done writing stimulus and fitness 
+
 
             if (k == myPars.maxtime-1)
             {
