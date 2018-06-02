@@ -571,7 +571,7 @@ void UpdateAnts(Population & Pop, Params & Par)
 //Creates value for delta with a stochastic sine wave (Botero et al. 2015)
 void Stochsine(Params & Par)
 {
-Par.delta = Par.A  * sin((2 *
+Par.delta = (Par.A  * sin((2 *
 
 	//pi
 	3.14159265358979323846 *
@@ -579,11 +579,11 @@ Par.delta = Par.A  * sin((2 *
 	//Calculate cumulative timesteps
 	((Par.maxtime*Par.gensdone) + Par.stepsdone)
 
-	) / Par.maxtime* Par.genspercycle)
-	+ Par.B *
+	) / Par.maxtime* Par.genspercycle))
+	+ (Par.B *
 
 	//Random number between 0 and randdommax
-	gsl_rng_uniform_pos(rng_global) * Par.randommax;
+	gsl_rng_uniform_pos(rng_global) * Par.randommax);
 }
 
 
@@ -964,7 +964,7 @@ int main(int argc, char* argv[])
         out.open("data_work_alloc.txt");
         out3.open("stimulus_acts.txt");
         
-        out << "Gen" << "\t" << "Col"  << "\t" << "NumActs1" << "\t" << "NumActs2" <<
+        out << "Gen" << "\t" << "Col"  << "\t" << "A"  << "\t" << "B"  << "\t" << "NumActs1" << "\t" << "NumActs2" <<
         "\t" << "WorkAlloc1" << "\t" << "WorkAlloc2" <<"\t" << "Idle"<< "\t" << "Fitness" << "\t" << "Mean_F" << "\t" << "Mean_F_franjo" <<endl; 
 
         out3 << "Gen" << ";" << "Time" << ";" << "Col" << ";" << "Stim1" << ";" << "Workers1" << ";" << "Stim2" << ";" << "Workers2" << ";" << "Fitness" << endl;
@@ -1084,7 +1084,7 @@ int main(int argc, char* argv[])
                             MyColonies[col].mean_work_alloc[task]/=equil_steps;
                         }
 
-                        out << g << "\t" << col << "\t"; 
+                        out << g << "\t" << col << "\t" << myPars.A << "\t" << myPars.B << "\t"; 
 
                         for (int task = 0; task < myPars.tasks; ++task) 
                         {
