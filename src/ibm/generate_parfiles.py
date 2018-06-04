@@ -236,7 +236,7 @@ maxtime = 3000
 pardict = OrderedDict()
 
 pardict["N"]=[ 500] # number of workers / colony
-pardict["Col"]=[ 250] # number of colonies
+pardict["Col"]=[ 500] # number of colonies
 pardict["maxtime"]=[ 500] # time steps work is performed before reproduction
 pardict["meanT1"]=[ 5.0 ] # mean threshold for each task
 pardict["meanT2"]=[ 5.0 ] # mean threshold for each task
@@ -244,13 +244,13 @@ pardict["alfa1"]=[ 3.0 ] # maximum work efficiency task 1
 pardict["alfa2"]=[ 3.0 ] # maximum work efficiency task 1
 pardict["p"]=[ 0.2] # quitting probability
 pardict["mutp"]=[0.05] # mutation probability
-pardict["maxgen"]=[500] # number of generations 
+pardict["maxgen"]=[1000] # number of generations 
 pardict["beta_fit"]=[0.5] # exponent task 1 
 pardict["gamma_fit"]=[0.5] # exponent task 2 
-pardict["A"]=[0.00001, 0.5, 1] #Deterministic factor
-pardict["B"]=[0.00001, 0.5, 1] #Stochastic factor  
-pardict["genspercycle"]=[1] #Generations per environmental cycle      
-pardict["randommax"]=[10] #Maximum value of positive random number
+pardict["A"]=[1] #Deterministic factor
+pardict["B"]=[1] #Stochastic factor  
+pardict["genspercycle"]=[10] #Generations per environmental cycle      
+pardict["randommax"]=[0, 0.001, 0.01, 0.1, 1, 10] #Maximum value of positive random number
 
 
 # make all parameter combinations

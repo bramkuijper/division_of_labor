@@ -571,7 +571,11 @@ void UpdateAnts(Population & Pop, Params & Par)
 //Creates value for delta with a stochastic sine wave (Botero et al. 2015)
 void Stochsine(Params & Par)
 {
-Par.delta = (Par.A  * sin((2 *
+Par.delta = 
+//plus one for baseline
+1+
+
+(Par.A  * sin((2 *
 
 	//pi
 	3.14159265358979323846 *
@@ -590,6 +594,7 @@ Par.delta = (Par.A  * sin((2 *
 // Increases the stimulus by delta
 // Decreases the stimulus depending on the amount of work done towards a task
 void UpdateStim(Population & Pop, Params & Par)   
+
 {
 
 	//stochsine
@@ -1047,7 +1052,7 @@ int main(int argc, char* argv[])
             // only output stimulus every nth timestep to prevent datafiles becoming
             // massive. If you want to output it every timestep, set
             // k % 1
-            if (k % 10 == 0 && myPars.Col > 1)
+            if (g >= myPars.maxgen*0.75 && k % 10 == 0 && myPars.Col > 1)
             {
                 // loop through colonies
                 for (unsigned int col = 0; col < MyColonies.size(); ++col)
