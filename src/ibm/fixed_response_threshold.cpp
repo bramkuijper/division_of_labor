@@ -51,7 +51,8 @@ struct Params
                     // is no task
 
     // vectors containing stimulus parameters
-    vector<double> meanT; // mean thresholds
+    vector<double> meanT1; // mean thresholds
+    vector<double> meanT2; // mean thresholds
     vector<double> alfa; // stimulus decrease due to work
 
     // function to read in the parameters from stream
@@ -125,10 +126,19 @@ istream & Params::InitParams(istream & in)
     double tmp;
 
     // read in the initial mean thresholds for each stimulus
+    // for the first half of the population
     for (int i=0; i<tasks; i++) 
     {
         in >> tmp; 
-        meanT.push_back(tmp);
+        meanT1.push_back(tmp);
+    }
+    
+    // read in the initial mean thresholds for each stimulus
+    // for the second half of the population
+    for (int i=0; i<tasks; i++) 
+    {
+        in >> tmp; 
+        meanT2.push_back(tmp);
     }
 
     // read in the stimulus decrease parameters
@@ -169,7 +179,12 @@ void ShowParams(Params & Par)
      
      for (int task=0; task<Par.tasks; task++)
      {
-        cout << "Initial T" <<task <<"\t" << Par.meanT[task] << endl;
+        cout << "Initial T1" <<task <<"\t" << Par.meanT1[task] << endl;
+     }
+     
+     for (int task=0; task<Par.tasks; task++)
+     {
+        cout << "Initial T2" <<task <<"\t" << Par.meanT2[task] << endl;
      }
      
      for (int task=0; task<Par.tasks; task++)
@@ -212,11 +227,23 @@ void InitFounders(Population &Pop, Params &Par)
         // give males and queens random thresholds
         for (int task=0; task<Par.tasks; ++task)
         {
-            Pop[i].male.threshold[task] = Par.meanT[task] 
-                + gsl_ran_gaussian(rng_global,1);
+            if (i < Pop.size()/2)
+            {
+                Pop[i].male.threshold[task] = Par.meanT1[task] 
+                    + gsl_ran_gaussian(rng_global,1);
 
-            Pop[i].queen.threshold[task] = Par.meanT[task] 
-                + gsl_ran_gaussian(rng_global,1);
+                Pop[i].queen.threshold[task] = Par.meanT1[task] 
+                    + gsl_ran_gaussian(rng_global,1);
+
+            }
+            else
+            {
+                Pop[i].male.threshold[task] = Par.meanT2[task] 
+                    + gsl_ran_gaussian(rng_global,1);
+
+                Pop[i].queen.threshold[task] = Par.meanT2[task] 
+                    + gsl_ran_gaussian(rng_global,1);
+            }
         }
 
         Pop[i].male.mated =true;
@@ -285,7 +312,7 @@ void InitAnts(Ant & myAnt, Params & Par, Colony & myCol)
     {
         for (int task=0; task<Par.tasks; ++task)
         {
-            myAnt.threshold[task] = Par.meanT[task];
+            myAnt.threshold[task] = Par.meanT1[task];
         }
     }
 
