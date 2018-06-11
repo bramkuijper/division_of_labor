@@ -996,8 +996,18 @@ int main(int argc, char* argv[])
         out.open("data_work_alloc.txt");
         out3.open("stimulus_acts.txt");
         
-        out << "Gen" << "\t" << "Col"  << "\t" << "A"  << "\t" << "B"  << "\t" << "NumActs1" << "\t" << "NumActs2" <<
-        "\t" << "WorkAlloc1" << "\t" << "WorkAlloc2" <<"\t" << "Idle"<< "\t" << "Fitness" << "\t" << "Mean_F" << "\t" << "Mean_F_franjo" <<endl; 
+        out << "Gen" << "\t" 
+            << "Col"  << "\t" 
+            << "A"  << "\t" 
+            << "B"  << "\t" 
+            << "NumActs1" << "\t" 
+            << "NumActs2" << "\t" 
+            << "WorkAlloc1" << "\t" 
+            << "WorkAlloc2" <<"\t" 
+            << "Idle"<< "\t" 
+            << "Fitness" << "\t" 
+            << "Mean_F" << "\t" 
+            << "Mean_F_franjo" <<endl; 
 
         out3 << "Gen" << ";" << "Time" << ";" << "Col" << ";" << "Stim1" << ";" << "Workers1" << ";" << "Stim2" << ";" << "Workers2" << ";" << "Fitness" << endl;
     }
@@ -1128,7 +1138,7 @@ int main(int argc, char* argv[])
                             out << MyColonies[col].mean_work_alloc[task] << "\t"; 
                         }
 
-                        out << "\t" << MyColonies[col].idle << 
+                        out << MyColonies[col].idle << 
                             "\t" << MyColonies[col].fitness << 
                             "\t" << MyColonies[col].mean_F <<
                             "\t" << MyColonies[col].mean_F_franjo << endl;

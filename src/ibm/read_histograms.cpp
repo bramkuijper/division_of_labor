@@ -35,6 +35,8 @@ void split_folders(const std::string& str, Container &cont, char delim='/')
 
 
 // opens the file with all the values
+// also stores the basepath of file as we need that 
+// to write the actual histogram to
 void initFile(
         int argc, 
         char **argv, 
