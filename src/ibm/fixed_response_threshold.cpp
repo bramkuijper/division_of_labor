@@ -1185,18 +1185,18 @@ int main(int argc, char* argv[])
                         << MyColonies[col].mean_F << ";" 
                         << MyColonies[col].mean_F_franjo << endl;	     
                     
-                    for (unsigned int ind = 0; ind < MyColonies[col].MyAnts.size(); ++ind)
-                    {
-                        out2 << g << ";";
-
-                        for (int task=0; task<myPars.tasks; ++task)
-                        {
-                            out2 << MyColonies[col].MyAnts[ind].threshold[task] << ";"; 
-
-                            out2 << MyColonies[col].MyAnts[ind].F << ";" 
-                                << MyColonies[col].MyAnts[ind].F_franjo <<endl;
-                        }
-                    }
+//                    for (unsigned int ind = 0; ind < MyColonies[col].MyAnts.size(); ++ind)
+//                    {
+//                        out2 << g << ";";
+//
+//                        for (int task=0; task<myPars.tasks; ++task)
+//                        {
+//                            out2 << MyColonies[col].MyAnts[ind].threshold[task] << ";"; 
+//                        }
+//                        
+//                        out2 << MyColonies[col].MyAnts[ind].F << ";" 
+//                            << MyColonies[col].MyAnts[ind].F_franjo <<endl;
+//                    }
                 }
             }
         } // for (int k = 0; k < myPars.maxtime; ++k)

@@ -45,6 +45,7 @@ histo_exe_basename = "xreadhisto"
 
 # the basename of the resulting histogram file
 histogram_basename = "histograms.csv"
+number_columns_histo = 6
 
 # filename of the work allocation file
 work_file_basename = "data_work_alloc.txt"
@@ -65,7 +66,7 @@ parser = argparse.ArgumentParser(description="Plot simulation result for the fix
 
 # add the data_work_alloc file as an obligatory argument
 parser.add_argument('pathname', 
-        metavar="dir",
+        metavar="directory",
         type=str,
         nargs=1,
         help="a pathname in which the " + work_file_basename + " file is located")
@@ -125,21 +126,19 @@ if use_hist:
         assert(allele_dist_file.exists())
 
         # call the histogram creation executable and let it work on the file
-        subprocess.call([str(histo_exe), str(allele_dist_file)])
-
+        subprocess.call([str(histo_exe), 
+            str(allele_dist_file), 
+            str(number_columns_histo)])
 
         # see whether the histograms.csv file is produced
         assert(result_histo_name.exists())
-
 
     # get data on branching for learning and forgetting
     # this is a histogram with all sorts of values
     branch_data = pd.read_csv(
             filepath_or_buffer=result_histo_name, 
             sep=";", 
-            header=None, # no header
-            index_col=False,
-            names=["minbin","maxbin","generation","trait","count"] # hence provide header names
+            index_col=False
             )
 
     print("read branch data")
@@ -148,7 +147,9 @@ if use_hist:
     def the_pow(x):
         return(x**(0.25))
 
-    branch_data["count"] = branch_data["count"].apply(the_pow)
+    # power transform the count data
+    branch_data["count"] = branch_data[
+            "count"].apply(the_pow)
 
     # generate the pivot table that is necessary to plot it in imshow()
     def generate_pivot(the_data, x, y, z):
@@ -168,25 +169,23 @@ if use_hist:
         return(x, y, z)
 
 
-    # generate a pivot table for learning
-    (x_learn, y_learn, learn_count) = generate_pivot(
-            the_data = branch_data[branch_data["trait"]=="learn"], 
+    # generate a pivot table for the female threshold data
+    (x_threshold1, y_threshold1, threshold1_count) = generate_pivot(
+            the_data = branch_data[branch_data["traitname"]=="trait0"], 
             x="generation",
-            y="minbin",
+            y="bin_start",
             z="count"
             )
 
     print("pivot 1")
 
-    # generate a pivot table for forgetting
-    (x_forget, y_forget, forget_count) = generate_pivot(
-            the_data = branch_data[branch_data["trait"]=="forget"], 
+    # generate a pivot table for the female threshold data
+    (x_threshold2, y_threshold2, threshold2_count) = generate_pivot(
+            the_data = branch_data[branch_data["traitname"]=="trait1"], 
             x="generation",
-            y="minbin",
+            y="bin_start",
             z="count"
             )
-
-    print("pivot 2")
 
 #########################################
 
@@ -201,7 +200,7 @@ fig = plt.figure(figsize=(10,18))
 # see: 
 widths = [ 1, 0.05 ]
 
-numrows = 8
+numrows = 5
 
 heights = [ 1 for x in range(0,numrows) ]
 
@@ -216,31 +215,31 @@ if use_hist:
     ax = plt.subplot(gs[0,0])
 
     # the plot for learning
-    ax.imshow(learn_count,
+    ax.imshow(threshold1_count,
         cmap="jet",
-        extent=[x_learn.min(), 
-            x_learn.max(), 
-            y_learn.min(), 
-            y_learn.max()],
+        extent=[x_threshold1.min(), 
+            x_threshold1.max(), 
+            y_threshold1.min(), 
+            y_threshold1.max()],
         origin="lower",
         aspect="auto")
 
-    ax.set_ylabel(r"Learning")
+    ax.set_ylabel(r"Threshold task 1")
 
     # start next entry of the graph
     ax = plt.subplot(gs[1,0])
 
     # the plot for learning
-    ax.imshow(forget_count,
+    ax.imshow(threshold2_count,
         cmap="jet",
-        extent=[x_forget.min(), 
-            x_forget.max(), 
-            y_forget.min(), 
-            y_forget.max()],
+        extent=[x_threshold2.min(), 
+            x_threshold2.max(), 
+            y_threshold2.min(), 
+            y_threshold2.max()],
         origin="lower",
         aspect="auto")
 
-    ax.set_ylabel(r"Forgetting")
+    ax.set_ylabel(r"Threshold task 2")
 
 
 # start next entry of the graph
@@ -259,33 +258,26 @@ print(len(list(work_alloc_data_agg.index.get_level_values("Gen"))))
 print(work_alloc_data.head())
 print(work_alloc_data_agg.head())
 
-
-# calculate confidence envelopes (mean + sd)
-min_sd_1 = work_alloc_data_agg.loc[:, idx["FitWork1",["mean"]]].sub(work_alloc_data_agg.loc[:, idx["FitWork1",["std"]]].values,1)
-
-max_sd_w1 = work_alloc_data_agg.loc[:, idx["FitWork1",["mean"]]].add(work_alloc_data_agg.loc[:, idx["FitWork1",["std"]]].values,1)
-
-min_sd_w2 = work_alloc_data_agg.loc[:, idx["FitWork2",["mean"]]].sub(work_alloc_data_agg.loc[:, idx["FitWork2",["std"]]].values,1)
-
-max_sd_w2 = work_alloc_data_agg.loc[:, idx["FitWork2",["mean"]]].add(work_alloc_data_agg.loc[:, idx["FitWork2",["std"]]].values,1)
-
-# start next entry of the graph
+# plot work allocation
 ax = plt.subplot(gs[2,0])
 
 
-min_sd_1 = work_alloc_data_agg.loc[:, idx["WorkAlloc1",["mean"]]].sub(
-        work_alloc_data_agg.loc[:, idx["WorkAlloc1",["std"]]])
+# auxiliary function to get confidence envelope
+def confidence_interval(variable_name):
+    global work_alloc_data_agg
+    
+    std_min = work_alloc_data_agg[variable_name]["mean"] - work_alloc_data_agg[variable_name]["std"]
+    std_max = work_alloc_data_agg[variable_name]["mean"] + work_alloc_data_agg[variable_name]["std"]
 
-max_sd_1 = work_alloc_data_agg.loc[:, idx["WorkAlloc1",["mean"]]].add(
-        work_alloc_data_agg.loc[:, idx["WorkAlloc1",["std"]]])
-
-min_sd_2 = work_alloc_data_agg.loc[:, idx["WorkAlloc2",["mean"]]].sub(
-        work_alloc_data_agg.loc[:, idx["WorkAlloc2",["std"]]])
-
-max_sd_2 = work_alloc_data_agg.loc[:, idx["WorkAlloc2",["mean"]]].add(
-        work_alloc_data_agg.loc[:, idx["WorkAlloc2",["std"]]])
+    return(std_min,std_max)
 
 
+
+(min_sd1, max_sd1) = confidence_interval("WorkAlloc1")
+(min_sd2, max_sd2) = confidence_interval("WorkAlloc1")
+
+# calculate lower bound of confidence envelope by subtracting standard
+# deviation from the mean
 
 
 ax.plot(
@@ -294,12 +286,12 @@ ax.plot(
         label="Work alloc task 1")
 
 ax.plot(
-        min_sd_1
+        min_sd1,
         color="lightblue",
         label="_nolabel")
 
 ax.plot(
-        max_sd_1
+        max_sd1,
         color="lightblue",
         label="_nolabel")
 
@@ -309,14 +301,15 @@ ax.plot(
         color="red",
         label="Work alloc task 2")
 
+
 ax.plot(
-        min_sd_2
-        color="lightred",
+        min_sd2,
+        color="pink",
         label="_nolabel")
 
 ax.plot(
-        max_sd_2
-        color="lightred",
+        max_sd2,
+        color="pink",
         label="_nolabel")
 
 # add a legend
@@ -329,23 +322,28 @@ ax.tick_params(
         which="both",
         labelbottom=False)
 
+
+(min_sd_idle, max_sd_idle) = confidence_interval("Idle")
+
 # start next entry of the graph
-ax = plt.subplot(gs[4,0])
+ax = plt.subplot(gs[3,0])
 
 ax.plot(
         work_alloc_data_agg.loc[:, idx["Idle",["mean"]]],
+        label="Idle",
         color="blue")
 
 ax.plot(
-        work_alloc_data_agg.loc[:, idx["Inactive",["mean"]]],
-        color="red")
+        min_sd_idle,
+        color="lightblue",
+        label="_nolabel")
 
-ax.set_ylabel(r"Idle etc")
+ax.plot(
+        max_sd_idle,
+        color="lightblue",
+        label="_nolabel")
 
-# add a legend
-ax.legend(
-        (r'Idle',
-            r'Inactive'))
+ax.set_ylabel(r"Idle")
 
 ax.tick_params(
         axis="x",
@@ -353,59 +351,23 @@ ax.tick_params(
         labelbottom=False)
 
 # start next entry of the graph
-ax = plt.subplot(gs[5,0])
+ax = plt.subplot(gs[4,0])
+
+(min_sd_fitness, max_sd_fitness) = confidence_interval("Fitness")
 
 ax.plot(
         work_alloc_data_agg.loc[:, idx["Fitness",["mean"]]],
         color="blue")
 
-ax.tick_params(
-        axis="x",
-        which="both",
-        labelbottom=False)
+ax.plot(
+        min_sd_fitness,
+        color="lightblue")
 
+ax.plot(
+        max_sd_fitness,
+        color="lightblue")
 
 ax.set_ylabel(r"Total $w$")
-# start next entry of the graph
-ax = plt.subplot(gs[6,0])
-
-ax.plot(
-        work_alloc_data_agg.loc[:, idx["End_stim1",["mean"]]],
-        color="blue")
-
-ax.plot(
-        work_alloc_data_agg.loc[:, idx["End_stim2",["mean"]]],
-        color="red")
-
-ax.set_ylabel(r"Stimulus")
-
-# add a legend
-ax.legend(
-        (r'End stim1',
-            r'End stim2'))
-
-ax.tick_params(
-        axis="x",
-        which="both",
-        labelbottom=False)
-
-
-# start next entry of the graph
-ax = plt.subplot(gs[7,0])
-
-ax.plot(
-        work_alloc_data_agg.loc[:, idx["mean_switches",["mean"]]],
-        color="blue")
-
-ax.plot(
-        work_alloc_data_agg.loc[:, idx["mean_workperiods",["mean"]]],
-        color="red")
-
-ax.set_ylabel(r"Switches")
-# add a legend
-ax.legend(
-        (r'Switches',
-            r'Workperiods'))
 
 format = "pdf"
 

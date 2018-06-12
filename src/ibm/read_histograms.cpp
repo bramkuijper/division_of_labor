@@ -16,8 +16,6 @@
 
 using namespace std;
 
-const size_t number_columns = 2;
-
 template <class Container>
 
 // function to split filenames into folders
@@ -35,8 +33,8 @@ void split_folders(const std::string& str, Container &cont, char delim='/')
 
 
 // opens the file with all the values
-// also stores the basepath of file as we need that 
-// to write the actual histogram to
+// also stores the folder in which the file is present
+// as we need to write the output file to that folder as well
 void initFile(
         int argc, 
         char **argv, 
@@ -66,7 +64,9 @@ void findExtremes(double *max,
         double *min, 
         ifstream &file, 
         unsigned long &file_begin,
-        string &header)
+        string &header,
+        size_t const number_columns
+        )
 {
     // go through the number of columns and 
     // calculate minima and maxima
@@ -84,8 +84,31 @@ void findExtremes(double *max,
     // get the first line containing the headers
     std::getline(file, line);
 
-    // store the file header
-    header = line;
+    // process the header line
+    // if the first character is a digit
+    // then this not a header line
+    if (isdigit(line[0]))
+    {
+        // hence we have to make a header ourselves
+        // first item is generation
+        header = "generation";
+
+        // next items are the individual traits, which
+        // we just label trait0, trait1, trait2, ...
+        for (size_t col_i = 0; col_i < number_columns; ++col_i)
+        {
+            stringstream ss;
+
+            ss << ";trait" << col_i;
+            header += ss.str();
+        }
+    }
+    else
+    {
+        // yes, header is present, so use it
+        header = line;
+    }
+
 
     // read the lines
     while (std::getline(file, line))
@@ -133,11 +156,11 @@ void findExtremes(double *max,
 }
 
 void initHistograms(gsl_histogram **histograms, 
-        size_t histogram_max, 
+        size_t number_columns, 
         double *max, 
         double *min)
 {
-    for (size_t i = 0; i < histogram_max; ++i)
+    for (size_t i = 0; i < number_columns; ++i)
     {
         histograms[i] = gsl_histogram_alloc(500);
         cout << "max " << i << ": " << max[i] << endl;
@@ -174,20 +197,30 @@ void resetHistograms(
 // write histograms to output file
 void writeHistograms(
         gsl_histogram **histograms, 
-        size_t histogram_max, 
+        size_t number_columns, 
         size_t generation, 
         FILE *file,
-        string file_header)
+        string file_header
+        )
 {
+    // the output of the histogram is
+    // bin[i-1];bin[i];generation;variable_name;count;
+
+    // make a stringstream to do some splitting work
+    // on the header line
     stringstream header_line(file_header);
 
     string header_item;
 
     size_t itemnum = 0;
 
+    // store a bunch of string streams 
+    // that each represents how output should 
+    // work for each histogram
     stringstream histostrings[number_columns];
 
-    // loop through the lines 
+    // loop through the header items
+    // item by item (split by ";")
     while (std::getline(header_line, header_item, ';')) 
     {
         if (itemnum > number_columns)
@@ -195,20 +228,29 @@ void writeHistograms(
             break;
         }
 
-        if (itemnum > 0)
+        // now store the trait name 
+        if (itemnum > 0) // skip the first item (as this is generation)
         {
+            // now generate the bin format for the histogram
+            // this should be 
             histostrings[itemnum-1] << itos(generation) << ";" 
-                << header_item << ";%f;";
+                << header_item << ";%f";
         }
 
         ++itemnum;
     }
 
-    for (size_t i = 0; i < histogram_max; ++i)
+    cout << histostrings[2].str() << endl;
+
+    // now print the histogram
+    for (size_t i = 0; i < number_columns; ++i)
     {
         gsl_histogram_fprintf(
-                file, 
-                histograms[i],"%e;",histostrings[i].str().c_str());
+                file, // stream
+                histograms[i], // the histogram object
+                "%f;", //the range format
+                histostrings[i].str().c_str() // the bin format);
+                ); 
     }
 }
 
@@ -219,11 +261,14 @@ void fillHistograms(
         ifstream &file, 
         unsigned long file_begin,
         string &file_header,
-        string &hist_file_name
+        string &hist_file_name,
+        size_t const number_columns
         )
 {
     gsl_histogram * histograms[number_columns];
 
+
+    // file to write output to
     FILE *myfile;
     
     if ( ! (myfile = fopen(hist_file_name.c_str(),"w")))
@@ -231,6 +276,12 @@ void fillHistograms(
         cout << "cannot open histograms for writing!" << endl;
         exit(1);
     }
+
+    // make header for the histogram 
+    string output_file_header = "bin_start;bin_end;generation;traitname;count\n";
+
+    // write the header to the histogram
+    fprintf(myfile, "%s", output_file_header.c_str());
 
     // initialize the histograms
     initHistograms(histograms, number_columns, max, min);
@@ -303,11 +354,20 @@ int main(int argc, char **argv)
 {
     ifstream file;
 
+    // variable to store the folder name 
+    // in which we find the histogram 
+    // file. We need to store the output file there
     string base_path;
 
+    // get number of columns present in the file
+    // from the command line
+    size_t number_columns = atoi(argv[2]);
+
     // open the file
+    // and also stores the basename of the file
     initFile(argc, argv, file, base_path);
     
+    // add the name of the output file
     base_path += "histograms.csv";
 
     // minima and maxima of each column
@@ -321,9 +381,22 @@ int main(int argc, char **argv)
     // written to the histogram output file
     string file_header;
 
-    findExtremes(max, min, file, file_begin, file_header);
+    findExtremes(max, 
+            min, 
+            file, 
+            file_begin, 
+            file_header, 
+            number_columns);
 
-    cout << file_begin << endl;
+    fillHistograms(max, 
+            min, 
+            file, 
+            file_begin, 
+            file_header, 
+            base_path,
+            number_columns);
 
-    fillHistograms(max, min, file, file_begin, file_header, base_path);
+    file.close();
+
+    return(0);
 }
