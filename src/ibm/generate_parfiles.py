@@ -249,6 +249,7 @@ pardict["mutp"]=[0.05] # mutation probability
 pardict["maxgen"]=[1000] # number of generations 
 pardict["beta_fit"]=[0.5] # exponent task 1 
 pardict["gamma_fit"]=[0.5] # exponent task 2 
+pardict["timecost"]=[10] # number of timesteps a worker has to wait before engaging in another task (this is a cost of switching)
 pardict["A"]=[0] #Deterministic factor
 pardict["B"]=[0] #Stochastic factor  
 pardict["genspercycle"]=[10] #Generations per environmental cycle      

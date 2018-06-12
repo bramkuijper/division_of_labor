@@ -35,7 +35,8 @@ struct Params
     int tasks;
     double mutp;//mutation probability
     int maxgen;
-    int timecost;
+    int timecost; // minimum amount of timesteps ants 
+                // before ants can start to work again (cost of switching)
     double beta_fit, gamma_fit;
     int seed;
 	
@@ -156,7 +157,8 @@ istream & Params::InitParams(istream & in)
         maxgen >> // maximum number of generations
         beta_fit >> // fitness weights
         gamma_fit >> // fitness weights
-        timecost >> // fitness weights
+        timecost >> // the minimum amount of time between tasks
+                    // (i.e., this is the cost of switching)
 		
 		//stochsine			 
 		A >> //Deterministic factor
@@ -467,10 +469,17 @@ cout << "chance to quit: " << Par.p << endl;
     if (gsl_rng_uniform(rng_global) < Par.p)
     {
         anyAnt.curr_act = Par.tasks;
+
+        // reset the time counter
+        // the focal ant may choose the same or another
+        // task next. However, she can only accept the task
+        // if she waited a certain number of timesteps
+        anyAnt.count_time = 0;
     }
 #ifndef SIMULTANEOUS_UPDATE  
     else
     {
+        // ant does not quit
         UpdateStimPerAnt(Par, anyCol, anyAnt, job);
     }
 #endif
