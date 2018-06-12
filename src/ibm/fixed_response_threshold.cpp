@@ -35,6 +35,7 @@ struct Params
     int tasks;
     double mutp;//mutation probability
     int maxgen;
+    int timecost;
     double beta_fit, gamma_fit;
     int seed;
 	
@@ -72,6 +73,8 @@ struct Ant
     int workperiods; // number of working periods 
     double F; // specialization value
     bool mated;
+
+    int count_time;
     double F_franjo;
 };
 
@@ -153,6 +156,7 @@ istream & Params::InitParams(istream & in)
         maxgen >> // maximum number of generations
         beta_fit >> // fitness weights
         gamma_fit >> // fitness weights
+        timecost >> // fitness weights
 		
 		//stochsine			 
 		A >> //Deterministic factor
@@ -198,6 +202,7 @@ void ShowParams(Params & Par)
      cout << "Max gen " <<  Par.maxgen << endl;
      cout << "Exp task 1 " <<  Par.beta_fit << endl;
      cout << "Exp task 2 " <<  Par.gamma_fit << endl;
+     cout << "Timecost " <<  Par.timecost << endl;
 
 	   //stochsine
 	   cout << "Deterministic Factor A " << Par.A << endl;
@@ -330,6 +335,7 @@ void InitAnts(Ant & myAnt, Params & Par, Colony & myCol)
     myAnt.F = 10;
     myAnt.F_franjo = 10;
     myAnt.mated = false;
+    myAnt.count_time = 0;
 }
 //------------------------------------------------------------------------------------
 
@@ -497,10 +503,12 @@ double RPfunction (double t, double s)
 
 // Causes an ant to perform one of the tasks, using responce probability
 // Involves the stimulus per ant and threshold, and defines when an ant might switch tasks
-void TaskChoice(Params & Par, Colony & anyCol, Ant & anyAnt)
+void TaskChoice(Params & Par, //parameter object
+        Colony & anyCol,  // current colony
+        Ant & anyAnt) // the ant in question
 { 
     // prob to meet one of two tasks is random
-    int job =  gsl_rng_uniform_int(rng_global, Par.tasks);  
+    int job = gsl_rng_uniform_int(rng_global, Par.tasks);  
        
 #ifdef DEBUG 
    cout << "Choosing tasks" << endl; 
@@ -511,7 +519,8 @@ void TaskChoice(Params & Par, Colony & anyCol, Ant & anyAnt)
 
     // ant chooses to perform the randomly chosen job
     if (gsl_rng_uniform(rng_global) < 
-            RPfunction(anyAnt.threshold[job],anyCol.stim[job])) 
+            RPfunction(anyAnt.threshold[job],anyCol.stim[job])
+            && anyAnt.count_time > Par.timecost) 
     {
         anyAnt.curr_act = job; 
         anyAnt.workperiods += 1; 
@@ -524,6 +533,7 @@ void TaskChoice(Params & Par, Colony & anyCol, Ant & anyAnt)
     else //randomly encountered task not chosen, ant stays idle
     {
         anyAnt.curr_act=2;
+        ++anyAnt.count_time; // counting goes on 
     }
 } // end of TaskChoice()
 //-------------------------------------------------------------------------------------------------
@@ -536,10 +546,12 @@ void UpdateAnts(Population & Pop, Params & Par)
     {
         for (int task = 0; task < Par.tasks; ++task)
         {
-            // reset work for tasks
+            // reset statistics on work for tasks to 0
             Pop[colony_i].workfor[task] = 0; 
         }
 
+        // go through individual ants of the colony
+        //
         // let active ants potentially quit
         // let idle ants potentially find work
         for (unsigned int ant_i = 0; 
@@ -558,7 +570,12 @@ void UpdateAnts(Population & Pop, Params & Par)
                         Pop[colony_i].MyAnts[ant_i].curr_act,
                         Par); 
             }
-            else // ant currently not active
+
+
+            // ant currently inactive, let it choose a task
+            // (note that this can include an ant
+            // who quit in the previous statement)
+            if (Pop[colony_i].MyAnts[ant_i].curr_act >= Par.tasks)
             {
                 //if inactive, choose a task 
                 TaskChoice(Par, Pop[colony_i], Pop[colony_i].MyAnts[ant_i]); 
@@ -598,11 +615,8 @@ void UpdateAnts(Population & Pop, Params & Par)
 //Creates value for delta with a stochastic sine wave (Botero et al. 2015)
 void Stochsine(Params & Par)
 {
-Par.delta = 
-//plus one for baseline
-1+
-
-(Par.A  * sin((2 *
+Par.delta =  //plus one for baseline stimulus increase
+1+ (Par.A  * sin((2 *
 
 	//pi
 	3.14159265358979323846 *

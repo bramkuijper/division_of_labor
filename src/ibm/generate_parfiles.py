@@ -249,8 +249,8 @@ pardict["mutp"]=[0.05] # mutation probability
 pardict["maxgen"]=[1000] # number of generations 
 pardict["beta_fit"]=[0.5] # exponent task 1 
 pardict["gamma_fit"]=[0.5] # exponent task 2 
-pardict["A"]=[1] #Deterministic factor
-pardict["B"]=[1] #Stochastic factor  
+pardict["A"]=[0] #Deterministic factor
+pardict["B"]=[0] #Stochastic factor  
 pardict["genspercycle"]=[10] #Generations per environmental cycle      
 pardict["randommax"]=[0, 0.001, 0.01, 0.1, 1, 10] #Maximum value of positive random number
 

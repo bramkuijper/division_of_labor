@@ -987,7 +987,7 @@ void QuitTask(Colony & anyCol, Ant & anyAnt, int job, Params & Par, gsl_rng *rng
 }
 
 //------------------------------------------------------------------------------
-void DoTask ( Params Par, Colony & anyCol, Ant & anyAnt,int job)
+void DoTask(Params Par, Colony & anyCol, Ant & anyAnt,int job)
 {
 
          anyAnt.curr_act = job; 
@@ -1065,7 +1065,11 @@ void WantTask (Params Par,
 //-----------------------------------------------------------------------------
 
 // evaluate whether ant should switch tasks
-void EvalTaskSwitch(Params & Par, Colony & anyCol, Ant & anyAnt,int myjob, gsl_rng *rng_r)
+void EvalTaskSwitch(Params & Par, 
+        Colony & anyCol, 
+        Ant & anyAnt,
+        int myjob, 
+        gsl_rng *rng_r)
 {
     // if it was doing this job previously 
     // or it did not do anything before
