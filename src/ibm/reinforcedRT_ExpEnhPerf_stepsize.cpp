@@ -1354,7 +1354,7 @@ void Calc_D(Colony & Col, Params & Par)
             // is total number of switches divided by total possible
             // moments to switch (which is total number of workperiods - 1)
             // -1 as you cannot switch anymore during the last work period
-            switch_prob = double(Col.MyAnts[ant_i].switches) / 
+            switch_prob = (double) Col.MyAnts[ant_i].switches / 
                 (Col.MyAnts[ant_i].workperiods - 1.0);
 
             // D = qbar (see eq (5) in Duarte et al) is then given by
