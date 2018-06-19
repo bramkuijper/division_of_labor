@@ -34,6 +34,8 @@ struct Params
     double p;  // quitting probability
     int tasks;
     double mutp;//mutation probability
+    double mutstd;//mutation variance (i.e., step size of mutations)
+    double recomb;//recombination rate between threshold loci
     int maxgen;
     int timecost; // minimum amount of timesteps ants 
                 // before ants can start to work again (cost of switching)
@@ -155,6 +157,8 @@ istream & Params::InitParams(istream & in)
 
     in >> p >> // quitting probability
         mutp >> // mutation probability
+        mutstd >> // mutation probability
+        recomb >> // mutation probability
         maxgen >> // maximum number of generations
         beta_fit >> // fitness weights
         gamma_fit >> // fitness weights
@@ -260,47 +264,52 @@ void InitFounders(Population &Pop, Params &Par)
 }
 //----------------------------------------------------------------------------------------------------------------------
 
-// Defines inheritance, producing worker threshold genotypes from their parents, including mutation
+double Mutate(double val, double mu, double mustd)
+{
+    if (gsl_rng_uniform(rng_global) < mu)
+    {
+        val += gsl_ran_gaussian(rng_global, mustd);
+    }
+
+    if (val < 0)
+    {
+        val = 0;
+    }
+
+    return(val);
+}
+
+
+// Defines inheritance, producing worker 
+// threshold genotypes from their parents, 
+// including mutation
 void Inherit(Ant &Daughter, Ant &Mom, Ant &Dad, Params &Par)
 {
+    // inherit from mom true or false
+    bool inherit_from_mom = gsl_rng_uniform(rng_global) < 0.5;
+
+    // now start to inherit all the thresholds
     for (int task = 0; task < Par.tasks; ++task)
     {
-        // draw a random number designating the parent who is the one
-        // who inherits the trait
-        int from_which_parent = gsl_rng_uniform_int(rng_global, 2);
+        if (task > 0)
+        {
+            // ok recombination happened, hence change parent of origin
+            if (gsl_rng_uniform(rng_global) < Par.recomb)
+            {
+                inherit_from_mom = !inherit_from_mom;
+            }
+        }
 
         // inherit from mom
-        if (from_which_parent == 0)
+        if (inherit_from_mom)
         {
-            // mutate 
-            if (gsl_rng_uniform(rng_global) < Par.mutp)
-            {
-                Daughter.threshold[task] = Mom.threshold[task] 
-                    + gsl_ran_gaussian(rng_global,1);
-            }
-            else 
-            {
-                Daughter.threshold[task] = Mom.threshold[task];
-            }
+            Daughter.threshold[task] = 
+                Mutate(Mom.threshold[task], Par.mutp, Par.mutstd);
         }
-        else // alternatively, inherit from dad
+        else // or inherit from dad
         {
-            if (gsl_rng_uniform(rng_global) < Par.mutp)
-            {
-                Daughter.threshold[task] = Dad.threshold[task] 
-                    + gsl_ran_gaussian(rng_global,1);
-            }
-            else
-            {
-                Daughter.threshold[task] = Dad.threshold[task];
-            }
-        }
-        
-        // perform boundary checking, as thresholds cannot be
-        // negative
-        if (Daughter.threshold[task] < 0)
-        {
-            Daughter.threshold[task] = 0.0;
+            Daughter.threshold[task] = 
+                Mutate(Dad.threshold[task], Par.mutp, Par.mutstd);
         }
     }
 }
