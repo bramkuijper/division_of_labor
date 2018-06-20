@@ -371,6 +371,6 @@ ax.set_ylabel(r"Total $w$")
 
 format = "pdf"
 
-plt.savefig("graph_simplot." + format, 
+plt.savefig(str(current_simpath / Path("graph_simplot." + format)), 
         format=format, 
         bbox_inches="tight")

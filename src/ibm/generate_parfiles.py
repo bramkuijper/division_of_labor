@@ -252,8 +252,9 @@ pardict["gamma_fit"]=[0.5] # exponent task 2
 pardict["timecost"]=[10] # number of timesteps a worker has to wait before engaging in another task (this is a cost of switching)
 pardict["A"]=[0] #Deterministic factor
 pardict["B"]=[0] #Stochastic factor  
-pardict["genspercycle"]=[10] #Generations per environmental cycle      
-pardict["randommax"]=[0, 0.001, 0.01, 0.1, 1, 10] #Maximum value of positive random number
+pardict["genspercycle"]=[10, 20, 30, 40, 50] #Generations per environmental cycle      
+#pardict["randommax"]=[0, 0.001, 0.01, 0.1, 1, 10] #Maximum value of positive random number
+pardict["randommax"]=[0] #Maximum value of positive random number
 
 
 # make all parameter combinations
