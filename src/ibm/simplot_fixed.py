@@ -20,23 +20,25 @@ import matplotlib.patches as mpatches
 import matplotlib.gridspec as gridspec
 from matplotlib.ticker import AutoMinorLocator
 from matplotlib import cm
-
-plt.style.use('base')
+from distutils.spawn import find_executable
 
 # some stuff to render fonts in graphs
 rcParams['axes.labelsize'] = 15
-rcParams['text.usetex'] = True
 rcParams['font.family'] = 'sans-serif'
 
-# some stuff to render fonts in graphs
-# see http://stackoverflow.com/questions/2537868/sans-serif-math-with-latex-in-matplotlib 
-rcParams['text.latex.preamble'] = [
-       r'\usepackage{siunitx}',   # i need upright \micro symbols, but you need...
-       r'\sisetup{detect-all}',   # ...this to force siunitx to actually use your fonts
-       r'\usepackage{helvet}',    # set the normal font here
-       r'\usepackage{sansmath}',  # load up the sansmath so that math -> helvet
-       r'\sansmath'               # <- tricky! -- gotta actually tell tex to use!
-]
+if find_executable('latex'): 
+
+    rcParams['text.usetex'] = True
+
+    # some stuff to render fonts in graphs
+    # see http://stackoverflow.com/questions/2537869/sans-serif-math-with-latex-in-matplotlib 
+    rcParams['text.latex.preamble'] = [
+           r'\usepackage{siunitx}',   # i need upright \micro symbols, but you need...
+           r'\sisetup{detect-all}',   # ...this to force siunitx to actually use your fonts
+           r'\usepackage{helvet}',    # set the normal font here
+           r'\usepackage{sansmath}',  # load up the sansmath so that math -> helvet
+           r'\sansmath'               # <- tricky! -- gotta actually tell tex to use!
+    ]
 
 
 # basename of the executable that makes histgrams out of the allele frequency
@@ -48,11 +50,13 @@ histogram_basename = "histograms.csv"
 number_columns_histo = 6
 
 # filename of the work allocation file
-work_file_basename = "data_work_alloc.txt"
+work_file_basename = "data_work_alloc*.txt"
+
+header_file_basename = "header.txt"
 
 # the file with the allelic distributions (we need to make a histogram
 # of this) 
-allele_file_basename = "threshold_distribution.txt"
+allele_file_basename = "threshold_distribution*.txt"
 
 #########################################
 
@@ -82,28 +86,67 @@ parser.add_argument('--hist',
 args = parser.parse_args()
 
 # resolve the current path (e.g., prevent symlinks etc)
-current_simpath = Path(vars(args)["pathname"][0]).resolve()
-
-# now get the file name of the work alloc file within this path
-work_alloc_file = list(current_simpath.glob(work_file_basename))
-
-assert(len(work_alloc_file) == 1)
-
-# also store the absolute base folder in which the data_work_alloc.txt is contained
-base_folder = current_simpath
+current_path = Path(vars(args)["pathname"][0]).resolve()
 
 # whether we need to produe the histograms showing branching in the 
 # different trait values
 use_hist = vars(args)["use_histogram"]
 
-# get the work allocation data and plot it
-work_alloc_data = pd.read_csv(work_alloc_file[0],
-        sep="\t")
+# get the work alloc data
+def get_work_alloc_data():
 
-# ok we need to plot histograms of the allelic values
-# hence we need to process the allelic values data
-if use_hist:
-    # perform a system call to generate histogram from the allele frequency data
+    global work_file_basename
+    global header_file_basename
+    global current_path
+
+    # now get the file name of the work alloc file within this path
+    # search on a simple glob, e.g., data_work_alloc*
+    work_alloc_file_list = list(current_path.glob(work_file_basename))
+
+    # if there are multiple files
+    # we have to concatenate them to one file
+    # and read that. TODO
+    if len(work_alloc_file_list) is not 1:
+        work_alloc_file_list = process_work_alloc_files(work_alloc_file_list)
+
+    assert(len(work_alloc_file_list) == 1)
+
+    # see whether there is a header file
+    header_file_list = list(current_path.glob(header_file_basename))
+
+    # ok if header file present read it in and get the actual headers
+    # from the file
+    if len(header_file_list) > 0:
+
+        # read the header file
+        f = open(str(header_file_list[0]))
+        fl = f.readlines()
+        f.close()
+
+        # tab-split the headers
+        header_list = fl[0].strip().split("\t")
+
+        # get the work allocation data and plot it
+        work_alloc_data = pd.read_csv(work_alloc_file_list[0],
+                header=None,
+                names=header_list,
+                sep="\t")
+
+    else:
+
+        # get the work allocation data and plot it
+        work_alloc_data = pd.read_csv(work_alloc_file_list[0],
+                sep="\t")
+
+    return(work_alloc_data)
+
+# get the individual threshold data 
+# as a histogram
+def get_threshold_data():
+
+    # perform a system call to get the directory where
+    # the current script file resides.
+    # in this directory is also the programme that makes histograms
     # https://stackoverflow.com/questions/3718657/how-to-properly-determine-current-script-directory 
     script_dir = PurePath(Path(__file__).resolve())
 
@@ -113,33 +156,37 @@ if use_hist:
     # see whether the exe is indeed there
     assert(histo_exe.exists())
 
-    # also check if the histo name is already existing, in which case
-    # we do not have to run the thingy again
-    result_histo_name = base_folder / histogram_basename
+    # generate the resulting histogram file name
+    result_histo_name = current_path / histogram_basename
 
-    if (not result_histo_name.exists()):
+    print(current_path)
 
-        # then create the filename of the allele_distrib_1.txt containing
-        # all the allelic values
-        allele_dist_file = base_folder / allele_file_basename
+    # search for any matching allelic value file
+    allele_dist_file_list = list(current_path.glob(allele_file_basename))
 
-        assert(allele_dist_file.exists())
+    assert(len(allele_dist_file_list) == 1)
 
-        # call the histogram creation executable and let it work on the file
-        subprocess.call([str(histo_exe), 
-            str(allele_dist_file), 
-            str(number_columns_histo)])
+    # call the histogram creation executable and let it work on the file
+    subprocess.call([str(histo_exe), 
+        str(allele_dist_file_list[0]), 
+        str(number_columns_histo)])
 
-        # see whether the histograms.csv file is produced
-        assert(result_histo_name.exists())
+    # see whether the histograms.csv file is produced
+    assert(result_histo_name.exists())
 
-    # get data on branching for learning and forgetting
+    # get data on branching 
     # this is a histogram with all sorts of values
     branch_data = pd.read_csv(
             filepath_or_buffer=result_histo_name, 
             sep=";", 
             index_col=False
             )
+
+    colnames = branch_data.columns.values
+
+    if "count" not in colnames:
+        print(branch_data.describe())
+        assert("count" in colnames)
 
     print("read branch data")
 
@@ -151,41 +198,26 @@ if use_hist:
     branch_data["count"] = branch_data[
             "count"].apply(the_pow)
 
-    # generate the pivot table that is necessary to plot it in imshow()
-    def generate_pivot(the_data, x, y, z):
+    return(branch_data)
 
-        # make a pivot table
-        the_pivot = the_data.pivot_table(
-                values=z, 
-                index=y, 
-                columns=x)
+# generate the pivot table that is necessary to plot it in imshow()
+def generate_pivot(the_data, x, y, z):
 
-        x, y = np.meshgrid(
-                the_pivot.columns.values, 
-                the_pivot.index.values)
+    # make a pivot table
+    the_pivot = the_data.pivot_table(
+            values=z, 
+            index=y, 
+            columns=x)
 
-        z = the_pivot.values
+    x, y = np.meshgrid(
+            the_pivot.columns.values, 
+            the_pivot.index.values)
 
-        return(x, y, z)
+    z = the_pivot.values
+
+    return(x, y, z)
 
 
-    # generate a pivot table for the female threshold data
-    (x_threshold1, y_threshold1, threshold1_count) = generate_pivot(
-            the_data = branch_data[branch_data["traitname"]=="trait0"], 
-            x="generation",
-            y="bin_start",
-            z="count"
-            )
-
-    print("pivot 1")
-
-    # generate a pivot table for the female threshold data
-    (x_threshold2, y_threshold2, threshold2_count) = generate_pivot(
-            the_data = branch_data[branch_data["traitname"]=="trait1"], 
-            x="generation",
-            y="bin_start",
-            z="count"
-            )
 
 #########################################
 
@@ -212,6 +244,29 @@ gs = gridspec.GridSpec(
         height_ratios=heights)
 
 if use_hist:
+
+    # get the threshold data
+    threshold_data = get_threshold_data()
+
+    # generate a pivot table for the female threshold data
+    (x_threshold1, y_threshold1, threshold1_count) = generate_pivot(
+            the_data = threshold_data[threshold_data["traitname"]=="trait0"], 
+            x="generation",
+            y="bin_start",
+            z="count"
+            )
+
+    print("pivot 1")
+
+    # generate a pivot table for the female threshold data
+    (x_threshold2, y_threshold2, threshold2_count) = generate_pivot(
+            the_data = threshold_data[threshold_data["traitname"]=="trait1"], 
+            x="generation",
+            y="bin_start",
+            z="count"
+            )
+
+
     ax = plt.subplot(gs[0,0])
 
     # the plot for learning
@@ -246,6 +301,9 @@ if use_hist:
 # the number of acts * their efficiency
 ax = plt.subplot(gs[2,0])
 
+# get the work allocation data
+work_alloc_data = get_work_alloc_data()
+
 # ok, now calculate min, max, mean, stddev and median
 # for all variables
 work_alloc_data_agg = work_alloc_data.groupby("Gen").agg(['min','max','mean','std','median'])
@@ -274,7 +332,7 @@ def confidence_interval(variable_name):
 
 
 (min_sd1, max_sd1) = confidence_interval("WorkAlloc1")
-(min_sd2, max_sd2) = confidence_interval("WorkAlloc1")
+(min_sd2, max_sd2) = confidence_interval("WorkAlloc2")
 
 # calculate lower bound of confidence envelope by subtracting standard
 # deviation from the mean
@@ -371,6 +429,8 @@ ax.set_ylabel(r"Total $w$")
 
 format = "pdf"
 
-plt.savefig(str(current_simpath / Path("graph_simplot." + format)), 
+graph_file_name = current_path / Path("graph_simplot." + format)
+
+plt.savefig(str(graph_file_name),
         format=format, 
         bbox_inches="tight")

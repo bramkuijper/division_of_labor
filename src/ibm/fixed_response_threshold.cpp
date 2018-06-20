@@ -34,6 +34,8 @@ struct Params
     double p;  // quitting probability
     int tasks;
     double mutp;//mutation probability
+    double mutstd;//mutation variance (i.e., step size of mutations)
+    double recomb;//recombination rate between threshold loci
     int maxgen;
     int timecost; // minimum amount of timesteps ants 
                 // before ants can start to work again (cost of switching)
@@ -105,6 +107,7 @@ struct Colony
     vector<double> HighT, LowT, CategT1, CategT2;
     vector<double>mean_work_alloc;
     double mean_F;
+    double mean_switches;
     int num_offspring;
     double mean_F_franjo;
 };
@@ -154,6 +157,8 @@ istream & Params::InitParams(istream & in)
 
     in >> p >> // quitting probability
         mutp >> // mutation probability
+        mutstd >> // mutation probability
+        recomb >> // mutation probability
         maxgen >> // maximum number of generations
         beta_fit >> // fitness weights
         gamma_fit >> // fitness weights
@@ -259,47 +264,52 @@ void InitFounders(Population &Pop, Params &Par)
 }
 //----------------------------------------------------------------------------------------------------------------------
 
-// Defines inheritance, producing worker threshold genotypes from their parents, including mutation
+double Mutate(double val, double mu, double mustd)
+{
+    if (gsl_rng_uniform(rng_global) < mu)
+    {
+        val += gsl_ran_gaussian(rng_global, mustd);
+    }
+
+    if (val < 0)
+    {
+        val = 0;
+    }
+
+    return(val);
+}
+
+
+// Defines inheritance, producing worker 
+// threshold genotypes from their parents, 
+// including mutation
 void Inherit(Ant &Daughter, Ant &Mom, Ant &Dad, Params &Par)
 {
+    // inherit from mom true or false
+    bool inherit_from_mom = gsl_rng_uniform(rng_global) < 0.5;
+
+    // now start to inherit all the thresholds
     for (int task = 0; task < Par.tasks; ++task)
     {
-        // draw a random number designating the parent who is the one
-        // who inherits the trait
-        int from_which_parent = gsl_rng_uniform_int(rng_global, 2);
+        if (task > 0)
+        {
+            // ok recombination happened, hence change parent of origin
+            if (gsl_rng_uniform(rng_global) < Par.recomb)
+            {
+                inherit_from_mom = !inherit_from_mom;
+            }
+        }
 
         // inherit from mom
-        if (from_which_parent == 0)
+        if (inherit_from_mom)
         {
-            // mutate 
-            if (gsl_rng_uniform(rng_global) < Par.mutp)
-            {
-                Daughter.threshold[task] = Mom.threshold[task] 
-                    + gsl_ran_gaussian(rng_global,1);
-            }
-            else 
-            {
-                Daughter.threshold[task] = Mom.threshold[task];
-            }
+            Daughter.threshold[task] = 
+                Mutate(Mom.threshold[task], Par.mutp, Par.mutstd);
         }
-        else // alternatively, inherit from dad
+        else // or inherit from dad
         {
-            if (gsl_rng_uniform(rng_global) < Par.mutp)
-            {
-                Daughter.threshold[task] = Dad.threshold[task] 
-                    + gsl_ran_gaussian(rng_global,1);
-            }
-            else
-            {
-                Daughter.threshold[task] = Dad.threshold[task];
-            }
-        }
-        
-        // perform boundary checking, as thresholds cannot be
-        // negative
-        if (Daughter.threshold[task] < 0)
-        {
-            Daughter.threshold[task] = 0.0;
+            Daughter.threshold[task] = 
+                Mutate(Dad.threshold[task], Par.mutp, Par.mutstd);
         }
     }
 }
@@ -532,7 +542,7 @@ void TaskChoice(Params & Par, //parameter object
             && anyAnt.count_time > Par.timecost) 
     {
         anyAnt.curr_act = job; 
-        anyAnt.workperiods += 1; 
+        ++anyAnt.workperiods; 
 
 #ifndef SIMULTANEOUS_UPDATE 
          UpdateStimPerAnt(Par, anyCol, anyAnt, job);
@@ -607,7 +617,7 @@ void UpdateAnts(Population & Pop, Params & Par)
                 // update the effective amount work done on the task
                 Pop[colony_i].workfor[current_act_id] += Par.alfa[current_act_id]; 
                 
-                // update the work done for that task 
+                // update the number of switches if current task is not the same as previous
                 if (Pop[colony_i].MyAnts[ant_i].last_act < Par.tasks 
                         && Pop[colony_i].MyAnts[ant_i].last_act != 
                                 Pop[colony_i].MyAnts[ant_i].curr_act)
@@ -684,12 +694,8 @@ void Calc_F(Population & Pop, Params & Par)
     double C;
     double totacts; // count of total acts on a task per ant
 
-    for (unsigned int colony_i = 0; 
-            colony_i < Pop.size(); 
-            ++colony_i)
+    for (unsigned int colony_i = 0;  colony_i < Pop.size(); ++colony_i)
     {
-        
-        
         double sumF=0;
         double sumF_franjo=0;
         double activ=0;
@@ -711,10 +717,14 @@ void Calc_F(Population & Pop, Params & Par)
             if (totacts > 0) 
             {
                 // the probability to switch = switches / acts
-                C = double(Pop[colony_i].MyAnts[ant_i].switches) / 
-                    Pop[colony_i].MyAnts[ant_i].workperiods;
+                C = (double) Pop[colony_i].MyAnts[ant_i].switches / 
+                    (Pop[colony_i].MyAnts[ant_i].workperiods - 1.0);
 
-                // q in Duarte et al 2012 BES eq. (5) is 1 - C
+                // D = qbar (see eq (5) in Duarte et al) is then given by
+                // qbar = 1.0 - switch_prob
+
+                // however, when we want to scale between -1 and 1,
+                // we do 1.0 - 2 * switch_prob 
 
                 Pop[colony_i].MyAnts[ant_i].F = 1.0 - 2.0*C;
                 Pop[colony_i].MyAnts[ant_i].F_franjo = 1.0 - C;
@@ -920,7 +930,8 @@ void MakeSexuals(Population & Pop, Params & Par)
         mySexuals[ind].countacts.resize(0);
         mySexuals[ind].last_act = Par.tasks;
         mySexuals[ind].curr_act = Par.tasks;
-        mySexuals[ind].switches = Par.tasks;
+        mySexuals[ind].switches = 0;
+        mySexuals[ind].mean_switches = 0;
         mySexuals[ind].F = 0;
         mySexuals[ind].mated = false;
 
@@ -1029,6 +1040,7 @@ int main(int argc, char* argv[])
             << "WorkAlloc2" <<"\t" 
             << "Idle"<< "\t" 
             << "Fitness" << "\t" 
+            << "Switches" << "\t" 
             << "Mean_F" << "\t" 
             << "Mean_F_franjo" <<endl; 
 
@@ -1163,6 +1175,7 @@ int main(int argc, char* argv[])
 
                         out << MyColonies[col].idle << 
                             "\t" << MyColonies[col].fitness << 
+                            "\t" << MyColonies[col].mean_switches << 
                             "\t" << MyColonies[col].mean_F <<
                             "\t" << MyColonies[col].mean_F_franjo << endl;
                  
