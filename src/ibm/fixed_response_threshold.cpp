@@ -96,6 +96,7 @@ struct Colony
     vector<double> newstim; // stimulus levels new timestep
     vector<double> workfor;  // number acts * eff each time step
     vector < int > numacts; // number of acts performed per task
+
     double idle; // proportion idle workers
     vector <double>last_half_acts; //number of acts performed in the last half of simulation
     double fitness; 
@@ -464,7 +465,6 @@ void UpdateStimPerAnt(Params & Par, Colony & anyCol, Ant & anyAnt, int task)
         anyCol.stim[task] = 0;
     }
 }
-//------------------------------------------------------------------------------
 
 // Checks whether an ant will cease task performance and becomes idle
 // Based on random draws of an ant's innate quitting probability, unrelated to any other varaiable
@@ -758,8 +758,7 @@ void CalcFitness(Population & Pop, Params & Par)
     {
         Pop[colony_i].idle = 0;
 
-        total = Pop[colony_i].last_half_acts[0] 
-            + Pop[colony_i].last_half_acts[1];
+        total = Pop[colony_i].last_half_acts[0] + Pop[colony_i].last_half_acts[1];
 
         if (total == 0)
         {
