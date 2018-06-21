@@ -331,15 +331,15 @@ def confidence_interval(variable_name):
 
 
 
-(min_sd1, max_sd1) = confidence_interval("WorkAlloc1")
-(min_sd2, max_sd2) = confidence_interval("WorkAlloc2")
+(min_sd1, max_sd1) = confidence_interval("Workalloc1")
+(min_sd2, max_sd2) = confidence_interval("Workalloc2")
 
 # calculate lower bound of confidence envelope by subtracting standard
 # deviation from the mean
 
 
 ax.plot(
-        work_alloc_data_agg.loc[:, idx["WorkAlloc1",["mean"]]],
+        work_alloc_data_agg.loc[:, idx["Workalloc1",["mean"]]],
         color="blue",
         label="Work alloc task 1")
 
@@ -355,7 +355,7 @@ ax.plot(
 
 
 ax.plot(
-        work_alloc_data_agg.loc[:, idx["WorkAlloc2",["mean"]]],
+        work_alloc_data_agg.loc[:, idx["Workalloc2",["mean"]]],
         color="red",
         label="Work alloc task 2")
 

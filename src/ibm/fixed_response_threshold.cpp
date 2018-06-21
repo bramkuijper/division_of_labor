@@ -1428,6 +1428,8 @@ void Write_Thresholds_Spec(
         denomin += p_i[task]*p_i[task];
     }
 
+    data_thresh << endl;
+
 	//cout << "denominator :" << denomin << endl;
 
 	data_f << gen <<";" 
@@ -1437,7 +1439,7 @@ void Write_Thresholds_Spec(
             << Pop[colony].mean_workperiods << ";"
 	    	<< Pop[colony].var_F << ";" 
             << Pop[colony].var_F_franjo << ";"
-	    	<< Pop[colony].var_switches <<";" 
+	    	<< Pop[colony].var_switches << ";" 
             << Pop[colony].var_workperiods << endl;
 } 
 
@@ -1557,32 +1559,32 @@ int main(int argc, char* argv[])
 
     // the datafiles
 	string datafile1, 
-           datafile2, 
-           datafile3, 
+           threshold_dist_file_name, 
+           specialization_dist_file_name, 
            datafile4, 
            dataants;
 
     // name the files
-	NameDataFiles(datafile1, datafile2, datafile3, datafile4, dataants);
+	NameDataFiles(datafile1, threshold_dist_file_name, specialization_dist_file_name, datafile4, dataants);
 
 	static ofstream out; 
-	static ofstream out2;
-	static ofstream out5;
-	static ofstream out_f;
+	static ofstream threshold_dist_output_file; // distribution of thresholds across the population
+	static ofstream one_generation_output_file;
+	static ofstream specialization_dist_output_file;
     static ofstream branching;
     static ofstream header1;
 	static ofstream out_ants;
 	
     out.open(datafile1.c_str());
     header1.open("header.txt");
-    out5.open("data_1gen.txt");
+    one_generation_output_file.open("data_1gen.txt");
 
     // write the headers to various data files
-    Write_Headers(header1, out5, myPars);
+    Write_Headers(header1, one_generation_output_file, myPars);
 
     // open the remaining data files
-	out2.open(datafile2.c_str());
-	out_f.open(datafile3.c_str());    
+	threshold_dist_output_file.open(threshold_dist_file_name.c_str()); // threshold distribution file
+	specialization_dist_output_file.open(specialization_dist_file_name.c_str());     // 
 	    
 	out_ants.open(dataants.c_str()); 
 
@@ -1637,8 +1639,8 @@ int main(int argc, char* argv[])
                         Write_Col_Data(out, myPars, MyColonies, g, col);
                           
                          // output only thresholds of foundresses and mean specialization 
-                        Write_Thresholds_Spec(out2, 
-                                out_f, 
+                        Write_Thresholds_Spec(threshold_dist_output_file, 
+                                specialization_dist_output_file, 
                                 myPars, 
                                 MyColonies, 
                                 g, 
@@ -1662,20 +1664,20 @@ int main(int argc, char* argv[])
             
                     double denomin = p1*p1 + p2*p2;
 
-                    out5 << k << ";" << col << ";"; 
+                    one_generation_output_file << k << ";" << col << ";"; 
 
                     for (int task=0; task<myPars.tasks; task++)
                     {
-                         out5 <<MyColonies[col].stim[task] << ";"; 
+                         one_generation_output_file <<MyColonies[col].stim[task] << ";"; 
                     }
 
                     for (int task=0; task<myPars.tasks; ++task)
                     {
-                         out5 << MyColonies[col].workfor[task]/
+                         one_generation_output_file << MyColonies[col].workfor[task]/
                              myPars.alfa[task] << ";";
                     }
 
-                    out5 << MyColonies[col].fitness << ";" << 
+                    one_generation_output_file << MyColonies[col].fitness << ";" << 
                             MyColonies[col].mean_F << ";" << 
                             MyColonies[col].mean_F_franjo/denomin << endl; 
 
