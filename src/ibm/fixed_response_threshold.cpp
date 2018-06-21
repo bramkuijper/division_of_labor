@@ -1,6 +1,6 @@
 
 // with stimulus update per ant, or per timestep (see define)
-// 02/05/2018 With stochsine function (ctrl+F: //stochsine).
+
 //---------------------------------------------------------------------------
 
 #include <vector>
@@ -12,10 +12,12 @@
 #include <algorithm>
 #include <gsl/gsl_rng.h>
 #include <gsl/gsl_randist.h>
+#include <sys/stat.h>
+#include <sstream>
 
 //#define DEBUG
-#define SIMULTANEOUS_UPDATE
-
+//#define SIMULTANEOUS_UPDATE
+//#define STOPCODE
 //---------------------------------------------------------------------------
 
 using namespace std;
@@ -25,245 +27,341 @@ using namespace std;
 gsl_rng_type const * T; // gnu scientific library rng type
 gsl_rng *rng_global; // gnu scientific rng 
 
-// Defining parameters
+
 struct Params
 {
     int N; //number of workers
     int Col; // number of colonies
     int maxtime; // time steps
-    double p;  // quitting probability
-    int tasks;
-    double mutp;//mutation probability
-    double mutstd;//mutation variance (i.e., step size of mutations)
-    double recomb;//recombination rate between threshold loci
-    int maxgen;
-    int timecost; // minimum amount of timesteps ants 
-                // before ants can start to work again (cost of switching)
-    double beta_fit, gamma_fit;
+    double p;  // the probability that a working ant quits working
+    int tasks; // number of tasks
+    int maxgen; // number of generations 
+    // the seed for the random number generator
     int seed;
-	
-	//stochsine
-	double A; //Deterministic factor
+
+    // the recombination rate between the threshold loci
+    // coding for the different tasks
+    // (scaled between 0 [no recombination]
+    // to 0.5 [full recombination]
+    double recomb;
+    
+    // the number of timesteps ants cannot work when switching
+    // between different tasks
+    int timecost;
+
+    double mutp;//mutation probability
+    double mutstep; // standard deviation of the mutational distribution 
+
+    double initStim; // initial stimulus value
+    double p_wait; // probability that ant has to wait c time steps before switching
+    int tau; // time step from which fitness is counted
+
+    vector<double> meanT; // mean thresholds
+    vector<double> delta; // mean stimulus increases
+
+    // efficiency with which workers perform 
+    // tasks (see Bonabeau et al 1996 eq. 3)
+    vector<double> alfa; 
+
+    // the decay parameter in stimulus 
+    // increase, see UpdateStim()
+    vector<double> beta; 
+
+    // exponents that weigh how strongly each task impinges on fitness
+    // these are the beta and 1-beta parameters 
+    // in eq (3) of Duarte et al 2012 Behav Ecol Sociobiol
+    vector<double> fitness_weights; 
+
+
+    // stochsine
+    double A; //Deterministic factor
 	double B; //Stochastic factor
 	int genspercycle; //Generations per environmental cycle
 	int randommax; //Maximum value of positive random number
-	int gensdone; //Generations completed
-	int stepsdone; //Timesteps completed in current generation
-	double delta;
+  
 
-    int no_task; // number indicating that the current task
-                    // is no task
-
-    // vectors containing stimulus parameters
-    vector<double> meanT1; // mean thresholds
-    vector<double> meanT2; // mean thresholds
-    vector<double> alfa; // stimulus decrease due to work
-
-    // function to read in the parameters from stream
+    // function to initialize the parameters from the parameter
+    // file
     istream & InitParams(istream & inp);
-};
+}; // en strut params
 
-
-// Defining an individual ant, and the values it contains
 struct Ant
 {
     // genome
-    vector < double > threshold; // thresholds of this ant
-    vector < int > countacts;   // counter of acts done by this ant
-    int last_act;
-    int curr_act;
+    vector <double> threshold;  // thresholds of this ant
+    vector <int> countacts;   // counter of acts done by this ant
+    vector < bool > want_task; // TODO
+    int last_act; // the ant's last act (needed to assess whether it switches or not)
+    int curr_act; // the ant's current act
     int switches; // number of transitions to a different task
     int workperiods; // number of working periods 
     double F; // specialization value
-    bool mated;
-
-    int count_time;
-    double F_franjo;
+    bool mated; // whether queen has been mated already
+    int count_time; // counter of timesteps to switch task
 };
 
-// Vectors of workers and sexuals
-typedef vector < Ant > Workers;
+typedef vector <Ant>  Workers;
 typedef vector <Ant> Sexuals;
 
-// Defining the colony of ants, and the values it contains
 struct Colony
 {
     Workers MyAnts; // stack of workers
     Ant male, queen; // queen and her male
     int ID; // unique ID of the colony
 
-    vector<double> stim; // stimulus levels
-    vector<double> newstim; // stimulus levels new timestep
+    vector<double> stim; // stimulus level at time t for each task
+    vector<double> newstim; // stimulus level at time t+1 for each task
     vector<double> workfor;  // number acts * eff each time step
-    vector < int > numacts; // number of acts performed per task
-    double idle; // proportion idle workers
+    vector <int> numacts; // number of acts performed per task
+
+    double idle; // proportion workers that _never_ worked in the simulation 
+    double inactive; // proportion workers that were idle each time step
     vector <double>last_half_acts; //number of acts performed in the last half of simulation
-    double fitness; 
+
+    // product of number of acts for each task, 
+    // every time step (of half of simulation)
+    double work_fitness; 
+
+    // TODO
+    double fitness;
+
     double diff_fit;// fitness difference to minimal fitness
     double rel_fit; // fitness relative to whole population
     double cum_fit; //cumulative fitness
 
+    // statistics
     vector<double> HighF, LowF, CategF;
     vector<double> HighT, LowT, CategT1, CategT2;
-    vector<double>mean_work_alloc;
+    vector<double> mean_work_alloc;
     double mean_F;
-    double mean_switches;
-    int num_offspring;
+    double var_F;
     double mean_F_franjo;
+    double var_F_franjo;
+    int num_offspring;
+    double mean_switches;
+    double var_switches;
+    double mean_workperiods;
+    double var_workperiods;
 };
 
-// Vector of colonies as the population
+// specify the population
 typedef vector < Colony > Population;
+
+// vector containing selected colonies that will 
+// reproduce
 vector <int> parentCol;
 double sum_Fit;
 Sexuals mySexuals;
 
-// A For loop/stream that reads in the parameter file, repeating for the number of tasks.
+
+int simstart_generation;
+int simpart;
+
+
+// A for loop/stream that reads in the parameter file, repeating for the number of tasks.
 istream & Params::InitParams(istream & in)
 {
-    // set the number of tasks
+    // set the number of tasks to 2
     tasks = 2;    
 
-    // read in population size
-    in >> N >> // number of workers
-        Col >> // number of colonies
-        maxtime;  // number of timesteps work is being done
-                    // during each evolutionary generation
+    // allocate space in vectors
+    meanT.reserve(tasks);
+    delta.reserve(tasks);
+    alfa.reserve(tasks);
+    beta.reserve(tasks);
+    fitness_weights.reserve(tasks);
 
+    // read in the first three parameters
+    in >> N >>
+        Col >>
+        maxtime; 
+
+    // temporary variable to process current input
     double tmp;
 
     // read in the initial mean thresholds for each stimulus
-    // for the first half of the population
-    for (int i=0; i<tasks; i++) 
+    for (int i = 0; i < tasks; ++i) 
     {
         in >> tmp; 
-        meanT1.push_back(tmp);
-    }
-    
-    // read in the initial mean thresholds for each stimulus
-    // for the second half of the population
-    for (int i=0; i<tasks; i++) 
-    {
-        in >> tmp; 
-        meanT2.push_back(tmp);
+        meanT.push_back(tmp);
     }
 
-    // read in the stimulus decrease parameters
-    for (int i=0; i<tasks; i++)
+    // read in the deltas
+    // this will change with stochsine TODO 
+    for (int i = 0; i < tasks; ++i) 
+    {    
+        in >> tmp ; 
+        delta.push_back(tmp);
+    }
+
+    // read in the work efficiency parameter (see eq. 3 in Bonabeau et al 1996)
+    for (int i = 0; i < tasks; ++i) 
     {
         in >> tmp; 
         alfa.push_back(tmp);
     }
 
-    in >> p >> // quitting probability
-        mutp >> // mutation probability
-        mutstd >> // mutation probability
-        recomb >> // mutation probability
-        maxgen >> // maximum number of generations
-        beta_fit >> // fitness weights
-        gamma_fit >> // fitness weights
-        timecost >> // the minimum amount of time between tasks
-                    // (i.e., this is the cost of switching)
-		
-		//stochsine			 
-		A >> //Deterministic factor
-		B >> //Stochastic factor
-		genspercycle >> //Generations per environmental cycle
-		randommax >> //Maximum value of positive random number
-		
-		seed;
+    // read in the basic growth rate of the stimulus, see UpdateStim
+    // Basically, we allow for s(t+1) = (1-beta)*s(t) + delta - alpha * f(Nworkers);
+    // whereas Bonabeau et al assume s(t+1) = s(t) + delta - alpha * f(Nworkers)
+    for (int i = 0; i < tasks; ++i) 
+    {
+        in >> tmp;
+        beta.push_back(tmp);
+    }
 
-    // set a number which indicates that ants are currently 
-    // working on no task at all
-    no_task = 7;
+    // read in the fitness exponents used for each task
+    // see Duarte et al 2012 Behav Ecol Sociobiol eq (3)
+    for (int i = 0; i < tasks; ++i) 
+    {
+        in >> tmp;
+        fitness_weights.push_back(tmp);
+    }
 
-    return in;
+    in >> p >>
+        mutp >>
+        mutstep >>
+        recomb >>
+        maxgen >>
+        timecost>>
+	initStim >>
+	p_wait >>
+	tau >>
+
+    //stochsine			 
+    A >> //Deterministic factor
+    B >> //Stochastic factor
+    genspercycle >> //Generations per environmental cycle
+    randommax >> //Maximum value of positive random number
+
+    seed;
+
+    return(in);
 }
-//----------------------------------------------------------------------------------
 
-// Diagnostic function: prints the results of the stream to verify that it performed correctly.
+// function to check if a file exists already
+bool FileExists(string strFilename) 
+{
+    struct stat stFileInfo;
+    int intStat;
+
+    // Attempt to get the file attributes
+    intStat = stat(strFilename.c_str(),&stFileInfo);
+
+    if (intStat == 0) 
+    {
+        // We were able to get the file attributes
+        // so the file obviously exists.
+        return(true);
+    } 
+
+    return(false);
+}
+
+//========================================================================================
+// Function that initializes founders from (previous) data 
+void StartFromLast(istream &in, Params &Par, Population &Pop)
+{
+    // temporary variable to process current input
+	double tmp;
+	
+	in >> simpart 
+	   >> simstart_generation; 
+
+	for (unsigned int i = 0; i < Pop.size(); ++i)
+    {
+        for (int task = 0; task < Par.tasks; ++task) 
+        {
+            in >> tmp;
+            Pop[i].male.threshold[task] = tmp;
+        }
+
+        for (int task = 0; task < Par.tasks; ++task) 
+        {
+            in >> tmp;
+            Pop[i].queen.threshold[task] = tmp;
+        }
+    }
+}
+
+// Diagnostic function: prints the results of the par object 
+// to verify that reading in the parameters was performed correctly.
 void ShowParams(Params & Par)
 {
-     cout <<"Workers " << Par.N << endl;
-     cout << "Colonies " << Par.Col << endl;
-     cout << "Timesteps " << Par.maxtime << endl;
-     
-     for (int task=0; task<Par.tasks; task++)
+    cout <<"Workers " << Par.N << endl;
+    cout << "Colonies " << Par.Col << endl;
+    cout << "Timesteps " << Par.maxtime << endl;
+ 
+     for (int task = 0; task < Par.tasks; ++task)
      {
-        cout << "Initial T1" <<task <<"\t" << Par.meanT1[task] << endl;
+        cout << "Initial T" << task << "\t" << Par.meanT[task] << endl;
      }
-     
-     for (int task=0; task<Par.tasks; task++)
+ 
+     for (int task = 0; task < Par.tasks; ++task)
      {
-        cout << "Initial T2" <<task <<"\t" << Par.meanT2[task] << endl;
+        cout << "Delta " << task << "\t"  << Par.delta[task] << endl;
      }
-     
-     for (int task=0; task<Par.tasks; task++)
+ 
+     for (int task = 0; task < Par.tasks; ++task)
      {
-        cout << "effic " << task << "\t" << Par.alfa[task] << endl;
+        cout << "Efficiency " << task << "\t" << Par.alfa[task] << endl;
      }
-     
-     cout << "prob quit" << Par.p << endl;
-     cout << "Task number " << Par.tasks << endl;
-     cout << "mut prob " << Par.mutp << endl;
-     cout << "Max gen " <<  Par.maxgen << endl;
-     cout << "Exp task 1 " <<  Par.beta_fit << endl;
-     cout << "Exp task 2 " <<  Par.gamma_fit << endl;
-     cout << "Timecost " <<  Par.timecost << endl;
-
-	   //stochsine
-	   cout << "Deterministic Factor A " << Par.A << endl;
-	   cout << "Stochastic Factor B " << Par.B << endl;
-	   cout << "Generations per Cycle " << Par.genspercycle << endl;
-	   cout << "Maximum Random Number " << Par.randommax << endl;
-
-	   cout << "Seed " << Par.seed << endl;
+ 
+    for (int task = 0; task < Par.tasks; ++task)
+    {
+        cout << "Decay " << task << "\t" << Par.beta[task] << endl;
+    }
+    
+    for (int task = 0; task < Par.tasks; ++task)
+    {
+        cout << "Fitness weight " << task << "\t" << Par.fitness_weights[task] << endl;
+    }
+ 
+    cout << "prob quit" << Par.p << endl;
+    cout << "Task number " << Par.tasks << endl;
+    cout << "mut prob " << Par.mutp << endl;
+    cout << "mut std " << Par.mutstd << endl;
+    cout << "recombination " << Par.recomb << endl;
+    cout << "Max gen " <<  Par.maxgen << endl;
+    cout << "seed " << Par.seed << endl;
+    cout << "timecost " << Par.timecost << endl;
+    cout << "Deterministic Factor A " << Par.A << endl;
+    cout << "Stochastic Factor B " << Par.B << endl;
+    cout << "Generations per Cycle " << Par.genspercycle << endl;
+    cout << "Maximum Random Number " << Par.randommax << endl;
 }
 //-----------------------------------------------------------------------------
+
+
 
 // Initialises the founding generation by mating a male and a queen, with attributes randomly selected from a normal distribution
 void InitFounders(Population &Pop, Params &Par)
 {
-#ifdef DEBUG  
-    assert(Par.tasks==2);
-    cout <<Par.Col << endl;
-#endif
     Pop.resize(Par.Col);
 
     // initialize thresholds of males and queens
-    for (unsigned int i = 0; i < Pop.size(); ++i)
+	for (unsigned int i = 0; i < Pop.size(); ++i)
     {
         Pop[i].male.threshold.resize(Par.tasks);
         Pop[i].queen.threshold.resize(Par.tasks);
 
-        // give males and queens random thresholds
-        for (int task=0; task<Par.tasks; ++task)
+        for (int task = 0; task < Par.tasks; ++task)
         {
+            // TODO
+            // why is this pop.size/2??
             if (i < Pop.size()/2)
             {
-                Pop[i].male.threshold[task] = Par.meanT1[task] 
-                    + gsl_ran_gaussian(rng_global,1);
+                Pop[i].male.threshold[task] = Par.meanT[task];
+                Pop[i].queen.threshold[task] = Par.meanT[task];
+		    }
 
-                Pop[i].queen.threshold[task] = Par.meanT1[task] 
-                    + gsl_ran_gaussian(rng_global,1);
+            Pop[i].male.mated =true;
+            Pop[i].queen.mated = true;
+		}
+	}
+}// end InitFounders
 
-            }
-            else
-            {
-                Pop[i].male.threshold[task] = Par.meanT2[task] 
-                    + gsl_ran_gaussian(rng_global,1);
-
-                Pop[i].queen.threshold[task] = Par.meanT2[task] 
-                    + gsl_ran_gaussian(rng_global,1);
-            }
-        }
-
-        Pop[i].male.mated =true;
-        Pop[i].queen.mated = true;
-    }
-}
-//----------------------------------------------------------------------------------------------------------------------
-
+// mutation of a single threshold allele
 double Mutate(double val, double mu, double mustd)
 {
     if (gsl_rng_uniform(rng_global) < mu)
@@ -271,6 +369,7 @@ double Mutate(double val, double mu, double mustd)
         val += gsl_ran_gaussian(rng_global, mustd);
     }
 
+    // thresholds cannot be <0 
     if (val < 0)
     {
         val = 0;
@@ -285,216 +384,214 @@ double Mutate(double val, double mu, double mustd)
 // including mutation
 void Inherit(Ant &Daughter, Ant &Mom, Ant &Dad, Params &Par)
 {
-    // inherit from mom true or false
+    // start with inheritance from mom (true) or from dad (false)
     bool inherit_from_mom = gsl_rng_uniform(rng_global) < 0.5;
+
+    double allelic_value;
 
     // now start to inherit all the thresholds
     for (int task = 0; task < Par.tasks; ++task)
     {
+        // when beyond the first gene locus, 
+        // check whether we have recombined
         if (task > 0)
         {
-            // ok recombination happened, hence change parent of origin
+            // ok recombination happened, hence change parent 
+            // from which the next allele will originate
             if (gsl_rng_uniform(rng_global) < Par.recomb)
             {
                 inherit_from_mom = !inherit_from_mom;
             }
         }
 
-        // inherit from mom
-        if (inherit_from_mom)
-        {
-            Daughter.threshold[task] = 
-                Mutate(Mom.threshold[task], Par.mutp, Par.mutstd);
-        }
-        else // or inherit from dad
-        {
-            Daughter.threshold[task] = 
-                Mutate(Dad.threshold[task], Par.mutp, Par.mutstd);
-        }
+        // inherit the allele from the designated parent
+        allelic_value = inherit_from_mom ? Mom.threshold[task] : Dad.threshold[task];
+
+        // mutate it
+        allelic_value = Mutate(allelic_value, Par.mutp, Par,mutstd);
+
+        // assign it to daughter
+        Daughter.threshold[task] = allelic_value;
     }
-}
-//----------------------------------------------------------------------------------------------------------
+} // end of Inherit
+
 
 // Initialises the ant workers, as generated by the Inherit function
 // Prints their threshold variables, and puts them to work on a task depending on their inherited thresholds
 void InitAnts(Ant & myAnt, Params & Par, Colony & myCol)
 {
+    // allocate space for the thresholds
     myAnt.threshold.resize(Par.tasks);
 
     if (Par.maxgen > 1)
     {
+        // inherit from mom and dad
         Inherit(myAnt, myCol.queen, myCol.male, Par);
     }
     else 
     {
-        for (int task=0; task<Par.tasks; ++task)
+        // or just assing thresholds from parameters
+        for (int task = 0; task < Par.tasks; ++task)
         {
-            myAnt.threshold[task] = Par.meanT1[task];
+            myAnt.threshold[task] = Par.meanT[task];
         }
     }
 
     myAnt.countacts.resize(Par.tasks);
+    myAnt.want_task.resize(Par.tasks);
 
+    // initialize counters and whether ant wants to perform a task
     for (int task = 0; task < Par.tasks; ++task)
     {
-        myAnt.countacts[task]=0;
+        myAnt.countacts[task] = 0;
+        myAnt.want_task[task] = false;
     }
-    
-    myAnt.last_act = Par.no_task; // set at a value of no task
+    //other stuff
+    myAnt.last_act = Par.tasks; // 0 = task 1, 1 = task 2, etc, n = idle
     myAnt.curr_act = Par.tasks; // 0 = task 1, 1 = task 2, etc, n = idle
-    myAnt.switches = 0; // set counter of switches to 0
+    myAnt.switches = 0; // swich counter of switches to 0
     myAnt.workperiods=0;
     myAnt.F = 10;
     myAnt.F_franjo = 10;
     myAnt.mated = false;
-    myAnt.count_time = 0;
+    myAnt.count_time=0;
 }
-//------------------------------------------------------------------------------------
+
 
 // Initilializes all colonies at the start of each evolutionary generation
 void Init(Population & Pop, Params & Par)
 {
-#ifdef DEBUG
-    cout << Pop.size() << endl;
-    cout << Par.N << endl;
-    assert(Pop.size()==Par.Col);
-#endif
-      
-    for (unsigned int i = 0; i< Pop.size(); i++)
+    for (unsigned int colony_i = 0; colony_i < Pop.size(); ++colony_i)
     {
-        Pop[i].MyAnts.resize(Par.N);
-        Pop[i].ID = i;
-        Pop[i].fitness = 0;
-        Pop[i].rel_fit = 0;
-        Pop[i].cum_fit = 0;
-        Pop[i].diff_fit = 0;
-        Pop[i].idle = 0;
-        Pop[i].mean_F = 10; // specialization value
-        Pop[i].mean_F_franjo =10;
+        Pop[colony_i].MyAnts.resize(Par.N);
+        Pop[colony_i].ID = colony_i;
+        Pop[colony_i].fitness = 0;
+        Pop[colony_i].rel_fit = 0;
+        Pop[colony_i].cum_fit = 0;
+        Pop[colony_i].diff_fit = 0;
+        Pop[colony_i].idle = 0;
+        Pop[colony_i].inactive = 0;
+        Pop[colony_i].mean_F = 10; // specialization value
+        Pop[colony_i].var_F=0;
+        Pop[colony_i].mean_F_franjo = 10;
+        Pop[colony_i].var_F_franjo = 0;
+        Pop[colony_i].mean_switches = 0;
+        Pop[colony_i].var_switches = 0;
+        Pop[colony_i].mean_workperiods=0;
+        Pop[colony_i].var_workperiods=0;
+        Pop[colony_i].work_fitness = 0;
 
         // erase any existing workforce numbers
-        if (!Pop[i].workfor.empty())
-        {
-            Pop[i].workfor.erase(
-                    Pop[i].workfor.begin(),
-                    Pop[i].workfor.end());
-        }
+        Pop[colony_i].workfor.clear();
+        Pop[colony_i].last_half_acts.clear();
+        Pop[colony_i].numacts.clear();
+        Pop[colony_i].stim.clear();
+        Pop[colony_i].newstim.clear();
+        Pop[colony_i].mean_work_alloc.clear();
 
-        assert(Pop[i].workfor.empty());
-
-        // erase any existing fitness data
-        if (!Pop[i].last_half_acts.empty()) 
-        {
-            Pop[i].last_half_acts.erase(
-                    Pop[i].last_half_acts.begin(),
-                    Pop[i].last_half_acts.end());
-        }
-
-        assert(Pop[i].last_half_acts.empty()); 
-
-        if (!Pop[i].numacts.empty()) 
-        {
-            Pop[i].numacts.erase(
-                    Pop[i].numacts.begin(),
-                    Pop[i].numacts.end());
-        }
-
-        assert(Pop[i].numacts.empty()); 
-
-        if (!Pop[i].stim.empty()) 
-        {
-            Pop[i].stim.erase(
-                    Pop[i].stim.begin(),
-                    Pop[i].stim.end());
-        }
-
-        assert(Pop[i].stim.empty()); 
-
-        if (!Pop[i].newstim.empty())
-        {
-            Pop[i].newstim.erase(
-                    Pop[i].newstim.begin(),
-                    Pop[i].newstim.end());
-        }
-
-        assert(Pop[i].newstim.empty());
-
-        if (!Pop[i].mean_work_alloc.empty())
-        {
-            Pop[i].mean_work_alloc.erase(
-                    Pop[i].mean_work_alloc.begin(),
-                    Pop[i].mean_work_alloc.end());
-        }
-
-        assert( Pop[i].mean_work_alloc.empty());
+        // allocate space for them
+        Pop[colony_i].workfor.reserve(Par.tasks);
+        Pop[colony_i].last_half_acts.reserve(Par.tasks);
+        Pop[colony_i].numacts.reserve(Par.tasks);
+        Pop[colony_i].stim.reserve(Par.tasks);
+        Pop[colony_i].newstim.reserve(Par.tasks);
+        Pop[colony_i].mean_work_alloc.reserve(Par.tasks);
 
         for (int job = 0; job < Par.tasks; ++job)
         {
-            Pop[i].workfor.push_back(0);
-            Pop[i].last_half_acts.push_back(0);
-            Pop[i].numacts.push_back(0);
-            Pop[i].stim.push_back(0);
-            Pop[i].newstim.push_back(0);
-            Pop[i].mean_work_alloc.push_back(0);
+            Pop[colony_i].workfor.push_back(0);
+            Pop[colony_i].last_half_acts.push_back(0);
+            Pop[colony_i].numacts.push_back(0);
+            Pop[colony_i].stim.push_back(Par.initStim);
+            Pop[colony_i].newstim.push_back(0);
+            Pop[colony_i].mean_work_alloc.push_back(0);
         }
     
-        for (unsigned int j = 0; j < Pop[i].MyAnts.size(); ++j)
+        for (unsigned int j = 0; j < Pop[colony_i].MyAnts.size(); ++j)
         {
-            InitAnts(Pop[i].MyAnts[j], Par, Pop[i]);
+            InitAnts(Pop[colony_i].MyAnts[j], Par, Pop[colony_i]);
         }
-    } // end of for Pop
+    } // end of for colony_i
 } // end of Init()
-//-------------------------------------------------------------------------------
+
+// diagnostic function to show all individual ants of a colony
+void ShowAnts(Colony & anyCol)
+{
+    cout << "Current values of:" << endl; 
+
+    for (unsigned int ant = 0; ant < anyCol.MyAnts.size(); ++ant)
+	{
+	    cout << "ant " << ant << endl;
+	    cout << "F " << anyCol.MyAnts[ant].F << endl; // specialization value
+	    cout << "switches " << anyCol.MyAnts[ant].switches << endl;
+	    cout << "workperiods " << anyCol.MyAnts[ant].workperiods << endl;
+	    cout << "count acts " << anyCol.MyAnts[ant].countacts[0] 
+            << "\t" << anyCol.MyAnts[ant].countacts[1]  << endl;
+	}
+}
+
+void ShowColony(Colony & anyCol)
+{
+    cout << "Current values of:" << endl; 
+    cout << "fitness " << anyCol.fitness << endl;
+    cout << "relative fitness " << anyCol.rel_fit << endl;
+    cout << "cumulative fitness " << anyCol.cum_fit << endl;
+    cout << "diff fit " << anyCol.diff_fit << endl;
+    cout << "idle " << anyCol.idle << endl;
+    cout << "inactive " << anyCol.inactive << endl;
+    cout << "mean_F " << anyCol.mean_F << endl; // specialization value
+    cout << "var_F" << anyCol.var_F << endl;
+    cout << "mean_franjo" << anyCol.mean_F_franjo << endl;
+    cout << "var_franjo " << anyCol.var_F_franjo << endl;
+    cout << "mean_switches " << anyCol.mean_switches << endl;
+    cout << "var_switches " <<anyCol.var_switches << endl;
+    cout << "workperiods " << anyCol.mean_workperiods << endl;
+    cout << "var workperiods " <<  anyCol.var_workperiods << endl;
+	cout << "workfor 1 " <<  anyCol.workfor[0]/3 << endl;
+	cout << "workfor 2" <<  anyCol.workfor[1]/3 << endl;
+	ShowAnts(anyCol);
+}
 
 // Updates the stimulus per ant for each timestep.
 // Stimulus for a task decreased based of how much work put towards it.
+//
+// funtion is only called when there is no simultaneous updating of 
+// the stimulus levels
 void UpdateStimPerAnt(Params & Par, Colony & anyCol, Ant & anyAnt, int task)
 {
-#ifdef DEBUG
-    cout << Par.alfa[task] << endl;
-    cout << Par.N << endl;
-    cout << anyCol.workfor[task] << endl;
-    cout <<anyCol.numacts[task]<< endl;
-    cout << anyCol.stim[task] << endl;
-#endif
-    anyCol.stim[task] -= (Par.alfa[task]/Par.N); 
-
+    anyCol.workfor[task] += Par.alfa[task];   //update the amount of work done (fitness) 
+    anyCol.stim[task] -= (Par.alfa[task]/Par.N); //update stimulus     
+    
     if (anyCol.stim[task] < 0)
     {
         anyCol.stim[task] = 0;
     }
 }
-//------------------------------------------------------------------------------
+
 
 // Checks whether an ant will cease task performance and becomes idle
-// Based on random draws of an ant's innate quitting probability, unrelated to any other varaiable
+// Based on random draws of an ant's 
+// innate quitting probability, unrelated to any other varaiable
 void QuitTask(Colony & anyCol, Ant & anyAnt, int job, Params & Par)
 {
-#ifdef DEBUG
-cout << "Quitting tasks" << endl;
-cout << "chance to quit: " << Par.p << endl;
-#endif
-
     // ant quits
     if (gsl_rng_uniform(rng_global) < Par.p)
     {
-        anyAnt.curr_act = Par.tasks;
-
-        // reset the time counter
-        // the focal ant may choose the same or another
-        // task next. However, she can only accept the task
-        // if she waited a certain number of timesteps
-        anyAnt.count_time = 0;
+        // ant does not want to do current task
+        anyAnt.want_task[anyAnt.curr_act] = false;
+        anyAnt.count_time = 0; // reset time to zero, she may choose the same or another task next
+        anyAnt.curr_act = Par.tasks; // set to no task currently
     }
-#ifndef SIMULTANEOUS_UPDATE  
-    else
+    else // ant works on
     {
-        // ant does not quit
+        // if no simultaneous update, update the stimulus levels for
+        // this ant
+#ifndef SIMULTANEOUS_UPDATE
         UpdateStimPerAnt(Par, anyCol, anyAnt, job);
-    }
 #endif
+    }
+
 }
-//------------------------------------------------------------------------------
 
 // Defines response probability to certain stimulus, influenced by threshold genotype
 double RPfunction (double t, double s) 
@@ -507,126 +604,240 @@ double RPfunction (double t, double s)
         // response according to Bonabeau et al eq 1
         RP = s*s / ((s*s)+(t*t));
     }
-    else if (s > 0.00000)
+    else if (s > 0.00)
     {
         RP = 1.0; // if threshold is zero, then probability of acting is 1.  
     }
     else
     {
-        RP=0.0;
+        RP = 0.0;
     }
     
     return(RP);
 }
 //-------------------------------------------------------------------------------
 
-// Causes an ant to perform one of the tasks, using responce probability
-// Involves the stimulus per ant and threshold, and defines when an ant might switch tasks
-void TaskChoice(Params & Par, //parameter object
-        Colony & anyCol,  // current colony
-        Ant & anyAnt) // the ant in question
-{ 
-    // prob to meet one of two tasks is random
-    int job = gsl_rng_uniform_int(rng_global, Par.tasks);  
-       
-#ifdef DEBUG 
-   cout << "Choosing tasks" << endl; 
-    assert(Par.tasks==2);
-    assert(anyCol.stim[job]>=0);
-    assert(anyAnt.threshold[job]>=0);
-#endif
+// take account of which task an ant is currently engaged
+// in (and in absence of simultaneous updating)
+void DoTask(Params Par, Colony & anyCol, Ant & anyAnt,int job)
+{
+    // updating her current act for the task she's doing
+    anyAnt.curr_act = job; 
 
-    // ant chooses to perform the randomly chosen job
-    if (gsl_rng_uniform(rng_global) < 
-            RPfunction(anyAnt.threshold[job],anyCol.stim[job])
-            && anyAnt.count_time > Par.timecost) 
-    {
-        anyAnt.curr_act = job; 
-        ++anyAnt.workperiods; 
+    // increasing her workperiods 
+    ++anyAnt.workperiods;
 
 #ifndef SIMULTANEOUS_UPDATE 
-         UpdateStimPerAnt(Par, anyCol, anyAnt, job);
+    //updating stimulus immediately 
+    UpdateStimPerAnt(Par, anyCol, anyAnt, job);
 #endif
+}
+//end DoTask
+//
 
-    } 
-    else //randomly encountered task not chosen, ant stays idle
+// check which stimuli (when noise added) exceed the thresholds
+void WantTask(Params Par, Colony & anyCol, Ant & anyAnt)
+{
+    // variable that stores which tasks
+    // have stimulus levels that exceed the threshold
+    vector<int>counter;
+    counter.reserve(Par.tasks); 
+
+    for (int task_i = 0; task_i < Par.tasks; ++task_i)
+	{
+        // add random noise to both threshold and stimulus
+        double stim_noise = anyCol.stim[task_i] + 
+            gsl_rng_ran_gaussian(rng_global,1.0);
+
+        double t_noise =  anyAnt.threshold[task_i] + 
+            gsl_rng_ran_gaussian(rng_global,1.0);
+
+        if (stim_noise < 0)
+        {
+            stim_noise = 0;
+        }
+
+        if (t_noise < 0)
+        {
+            t_noise = 0;
+        }
+
+        // check which tasks have stimulus levels beyond
+        if (stim_noise >= t_noise && stim_noise > 0) 
+        {
+            // the threshold
+            counter.push_back(task_i);  
+        } 
+        else 
+        {
+            // if her threshold not high enough, then quit with wanting task
+            anyAnt.want_task[task_i] = false; 
+        }
+	}
+
+    // if more than one task is above threshold, 
+    // do random task among those
+    if (counter.size() > 1) 
+	{
+        // select a random job
+		int job = gsl_rng_uniform_int(rng_global, counter.size());
+		anyAnt.want_task[counter[job]] = true;
+	}
+    else if (!counter.empty())
     {
-        anyAnt.curr_act=2;
-        ++anyAnt.count_time; // counting goes on 
+        // otherwise only want the firs (and only) task
+        anyAnt.want_task[counter[0]] = true;
     }
-} // end of TaskChoice()
-//-------------------------------------------------------------------------------------------------
 
-// Reassesses whether an ant should be working or idle
-// Updates work done towards a task using QuitTask and TaskChoice on all ants per colony
+    // if stimulus levels exceed all the thresholds
+    // ant will not want do any job
+}
+//end WantTask
+
+
+// evaluate whether ant can switch to task it wants to do
+void EvalTaskSwitch (Params & Par, Colony & anyCol, Ant & anyAnt, int myjob)
+{
+    // if current job is the last job
+    // that this ant did, there is no switching
+    // let ant just get on with the job
+    if (myjob == anyAnt.last_act) 
+    {
+        // set job stats and update stimuli
+        DoTask(Par, anyCol, anyAnt, myjob);
+    }
+    else // ant performed a different task relative to what it wants to do now
+    {
+        // find out whether ant cannot switch 
+        // to a different ask but has to wait
+        if (gsl_rng_uniform(rng_r) <= Par.p_wait
+                && anyAnt.count_time < Par.timecost)    
+        {
+            anyAnt.curr_act = Par.tasks; // stays idle for as long as count_time<timecost    
+            ++anyAnt.count_time; // increase the time counter as ant is doing nothing
+        }
+        else // ok ant can switch tasks now
+        {
+            // set job stats and update stimuli
+            DoTask(Par, anyCol, anyAnt, myjob);
+        }
+    }
+}
+//end EvalTaskSwitch
+
+
+// Causes an ant to perform one of the tasks, using responce probability
+// Involves the stimulus per ant and threshold, and defines when an ant might switch tasks
+void TaskChoice(Params & Par, Colony & anyCol, Ant & anyAnt)
+{ 
+    // check if ant previously did not want to do neither task 
+    if (!anyAnt.want_task[0] && !anyAnt.want_task[1])
+    {
+        // assess whether the ant still does not want to do
+        // any tasks
+        WantTask(Par, anyCol, anyAnt);
+    }
+
+    // go through the tasks and see whether they want to be done
+    for (int task = 0; task < Par.tasks; ++task)
+    {
+        // ok ant wants to do a task
+        // (it can only want to do one task)
+        if (anyAnt.want_task[task])
+        {
+            // ant currently doing nothing
+            if (anyAnt.last_act >= Par.tasks) 
+            {
+                // perform the task
+                DoTask(Par, anyCol, anyAnt, task);
+            }
+            else // ant currently engaged in a task
+            {
+                EvalTaskSwitch(Par, anyCol, anyAnt, task); 
+            }
+        }    
+        else 
+        {
+            // if she doesn't want the task, just remain idle
+            anyAnt.curr_act = Par.tasks; 
+        }
+    } // end for task_i
+} // end of TaskChoice()
+
+
+// update ants and number of switches
 void UpdateAnts(Population & Pop, Params & Par)
 {
+    int current_act;
+
+    // loop through colonies
     for (unsigned int colony_i = 0; colony_i < Pop.size(); ++colony_i)
     {
+        Pop[colony_i].inactive = 0;
+
         for (int task = 0; task < Par.tasks; ++task)
         {
             // reset statistics on work for tasks to 0
             Pop[colony_i].workfor[task] = 0; 
         }
-
         // go through individual ants of the colony
         //
         // let active ants potentially quit
         // let idle ants potentially find work
+
+        // first shuffle vectors
+        random_shuffle(Pop[colony_i].MyAnts.begin(), Pop[colony_i].MyAnts.end());
+     
         for (unsigned int ant_i = 0; 
                 ant_i < Pop[colony_i].MyAnts.size(); ++ant_i)  
         {
-            //if ant currently active 
+            // check whether ant is currently active
             if (Pop[colony_i].MyAnts[ant_i].curr_act < Par.tasks)
             {
-                //record last act
                 Pop[colony_i].MyAnts[ant_i].last_act = 
-                    Pop[colony_i].MyAnts[ant_i].curr_act; 
-                
-                // ant wants to quit?
+                    Pop[colony_i].MyAnts[ant_i].curr_act; //record last act
+
+                // check whether ant quits
                 QuitTask(Pop[colony_i], 
-                        Pop[colony_i].MyAnts[ant_i],
-                        Pop[colony_i].MyAnts[ant_i].curr_act,
+                        Pop[colony_i].MyAnts[ant_i], 
+                        Pop[colony_i].MyAnts[ant_i].curr_act, 
                         Par); 
             }
 
-
-            // ant currently inactive, let it choose a task
-            // (note that this can include an ant
-            // who quit in the previous statement)
+            // ant is currently inactive
             if (Pop[colony_i].MyAnts[ant_i].curr_act >= Par.tasks)
             {
                 //if inactive, choose a task 
                 TaskChoice(Par, Pop[colony_i], Pop[colony_i].MyAnts[ant_i]); 
             }
 
-            //update number of switches after choosing tasks
-            //
-            // ant is currently active
+            //if ant (still nor just now) active 
+            // update counters
             if (Pop[colony_i].MyAnts[ant_i].curr_act < Par.tasks)
             {
-                // get current act 
-                int current_act_id = Pop[colony_i].MyAnts[ant_i].curr_act;
-
-                // update colony-level counter of number of acts on the current task
-                ++Pop[colony_i].numacts[current_act_id];
-
-                // update ant-level counter of number of acts on the current task
-                ++Pop[colony_i].MyAnts[ant_i].countacts[current_act_id];
-
-                // update the effective amount work done on the task
-                Pop[colony_i].workfor[current_act_id] += Par.alfa[current_act_id]; 
-                
-                // update the number of switches if current task is not the same as previous
+                current_act = Pop[colony_i].MyAnts[ant_i].curr_act;
+                // update the number of acts done
+                ++Pop[colony_i].numacts[current_act];
+                ++Pop[colony_i].MyAnts[ant_i].countacts[current_act];
+           
+                // update number of switches
                 if (Pop[colony_i].MyAnts[ant_i].last_act < Par.tasks 
                         && Pop[colony_i].MyAnts[ant_i].last_act != 
-                                Pop[colony_i].MyAnts[ant_i].curr_act)
+                        Pop[colony_i].MyAnts[ant_i].curr_act)
                 {
                     ++Pop[colony_i].MyAnts[ant_i].switches;
                 }
             }
-        } // end for (unsigned int ant_i 
-    } // end for (unsigned int colony_i 
+            else
+            {
+                ++Pop[colony_i].inactive;
+            }
+        }// ant for ant_i 
+
+        // update proportion of inactive workers 
+        Pop[colony_i].inactive /= Pop[colony_i].MyAnts.size(); 
+
+    } // end for colony_i
 }  // end of UpdateAnts()
 //------------------------------------------------------------------------------
 
@@ -651,138 +862,211 @@ Par.delta =  //plus one for baseline stimulus increase
 }
 
 
+
 // Increases the stimulus by delta
 // Decreases the stimulus depending on the amount of work done towards a task
 void UpdateStim(Population & Pop, Params & Par)   
-
 {
-
 	//stochsine
 	Stochsine(Par);
 
     // go through all colonies
     for (unsigned int colony_i = 0; colony_i < Pop.size(); ++colony_i)
     {
-        // update the stimulus for each task
-        for (int task = 0; task < Par.tasks; ++task)
-        {
-            // calculate new stimulus level
-            Pop[colony_i].newstim[task] = Pop[colony_i].stim[task] 
-                + Par.delta;
 
+        for (int task=0; task < Par.tasks; ++task)
+        {
+            // update the value of the stimulus as in 
+            // in eq. (3) of Bonabeau, with the difference that 
+            // s(t) is multiplied by decay parameter 1-beta
+            Pop[colony_i].newstim[task] = (1.0 - Par.beta[task]) * Pop[colony_i].stim[task] 
+                + Par.delta[task];
+            
+            
 #ifdef SIMULTANEOUS_UPDATE
-            Pop[colony_i].newstim[task] -= (Pop[colony_i].workfor[task]/Par.N);
+            // in case of simultaneous update subtract all the work done
+            // from the stimulus dynamic in one go
+            // otherwise this will be done per ant later on
+            Pop[colony_i].newstim[task] -= (Pop[colony_i].workfor[task]/Par.N); 
 #endif
 
-            // update the stimulus
-            Pop[colony_i].stim[task] = Pop[colony_i].newstim[task];
-
+            // stimulus cannot be negative
             if (Pop[colony_i].stim[task] < 0)
             {
                 Pop[colony_i].stim[task] = 0;
             }
-        }
-    }
-}
 
+            // update the stimulus
+            Pop[colony_i].stim[task] = Pop[colony_i].newstim[task];
+        } // end for task
+    } // end for colony_i
+} // end UpdateStim()
 //------------------------------------------------------------------------------
 
-// Calculates specialization
-// Involves counting the number of task switches and the number of work periods (acts)
-void Calc_F(Population & Pop, Params & Par)
+void Calc_F(Population & Pop, Params & Par) // calculate specialization 
 {
     double C;
-    double totacts; // count of total acts on a task per ant
 
     for (unsigned int colony_i = 0;  colony_i < Pop.size(); ++colony_i)
     {
-        double sumF=0;
-        double sumF_franjo=0;
-        double activ=0;
+        Pop[colony_i].mean_F = 0; // F varies between -1 and 1
+        Pop[colony_i].mean_F_franjo = 0; // F_franjo varies between 0 and 1 
+        Pop[colony_i].mean_switches = 0; 
+        Pop[colony_i].mean_workperiods = 0; 
 
-        for (unsigned int ant_i = 0; 
-                ant_i < Pop[colony_i].MyAnts.size(); 
-                ++ant_i)
+        double sumsquares_F = 0;
+        double sumsquares_F_franjo = 0;
+
+        double sumsquares_switches = 0;
+        double sumsquares_workperiods = 0;
+
+        // keep track of the total number of ants
+        // who have worked at least once
+        size_t n_ants_active = 0;
+
+        for (unsigned int ant_i = 0; ant_i < Pop[colony_i].MyAnts.size(); ++ant_i)
         {
-            totacts = 0;
+            assert(Pop[colony_i].MyAnts[ant_i].workperiods <= Par.maxtime);
             C = 0;
-            
-            // sum the total amount acts over all tasks
-            for (int task = 0; task < Par.tasks; ++task)
-            {
-                totacts += Pop[colony_i].MyAnts[ant_i].countacts[task];
-            }
 
-            // calculate specialization values per ant
-            if (totacts > 0) 
+            // calculate average number of workperiods
+            Pop[colony_i].mean_workperiods += Pop[colony_i].MyAnts[ant_i].workperiods;
+            
+            // calculate sum of squares for variance
+            sumsquares_workperiods += Pop[colony_i].MyAnts[ant_i].workperiods * 
+                Pop[colony_i].MyAnts[ant_i].workperiods;
+
+            // if this ant has ever worked take statistics on switches
+            if (Pop[colony_i].MyAnts[ant_i].workperiods > 0)
             {
-                // the probability to switch = switches / acts
-                C = (double) Pop[colony_i].MyAnts[ant_i].switches / 
+                // calculate mean switches and 
+                // workperiods for book-keeping
+                Pop[colony_i].mean_switches += Pop[colony_i].MyAnts[ant_i].switches;
+
+                // calculate sum of squares for variance
+                sumsquares_switches += Pop[colony_i].MyAnts[ant_i].switches * 
+                    Pop[colony_i].MyAnts[ant_i].switches;
+      
+
+                //  C is frequency of switching between tasks 
+                //  which is the number of switches divided by the total number of
+                //  possible switches, which is the number of workperiods minus 1
+                //  (as one cannot switch anymore during the final workperiod)
+                C = double(Pop[colony_i].MyAnts[ant_i].switches) / 
                     (Pop[colony_i].MyAnts[ant_i].workperiods - 1.0);
+     
+                // F is between -1 and 1
+                Pop[colony_i].MyAnts[ant_i].F = 1 - 2*C;
+                // F_franjo is between 0 and 1
+                Pop[colony_i].MyAnts[ant_i].F_franjo = 1-C;
+     
+                // sum all values of F to calculate averages
+                Pop[colony_i].mean_F += Pop[colony_i].MyAnts[ant_i].F;
+                Pop[colony_i].mean_F_franjo += Pop[colony_i].MyAnts[ant_i].F_franjo;
 
-                // D = qbar (see eq (5) in Duarte et al) is then given by
-                // qbar = 1.0 - switch_prob
+                sumsquares_F += Pop[colony_i].MyAnts[ant_i].F *
+                    Pop[colony_i].MyAnts[ant_i].F;
 
-                // however, when we want to scale between -1 and 1,
-                // we do 1.0 - 2 * switch_prob 
+                sumsquares_F_franjo += Pop[colony_i].MyAnts[ant_i].F_franjo *
+                    Pop[colony_i].MyAnts[ant_i].F_franjo;
 
-                Pop[colony_i].MyAnts[ant_i].F = 1.0 - 2.0*C;
-                Pop[colony_i].MyAnts[ant_i].F_franjo = 1.0 - C;
-            }
-            
-            if (totacts > 0 && 
-                    Pop[colony_i].MyAnts[ant_i].curr_act < Par.tasks)
-            {
-                sumF += Pop[colony_i].MyAnts[ant_i].F;
+                // count this ant as an active one (as it has worked
+                // at least once)
+                ++n_ants_active;
+            } // end if workperiods > 0
+        } // end for ant_i
+
+        // calculate average switch rate by dividing by the number of active ants
+        Pop[colony_i].mean_switches /= n_ants_active;
         
-                activ +=1;
+        // calculate mean workperiods by dividing by the total number of ants
+        Pop[colony_i].mean_workperiods /= Pop[colony_i].MyAnts.size();
 
-                sumF_franjo += Pop[colony_i].MyAnts[ant_i].F_franjo;
-            }
-        } // end for (unsigned int ant_i = 0; 
+        // calculate variances
+        Pop[colony_i].var_switches = sumsquares_switches / n_ants_active - 
+            Pop[colony_i].mean_switches * Pop[colony_i].mean_switches;
 
-        Pop[colony_i].mean_F = sumF/activ;
-        Pop[colony_i].mean_F_franjo = sumF_franjo/activ; 
-    }
-}
-//------------------------------------------------------------------------------
+        Pop[colony_i].var_workperiods = sumsquares_workperiods / Pop[colony_i].MyAnts.size() -
+            Pop[colony_i].mean_workperiods * Pop[colony_i].mean_workperiods;
+
+        Pop[colony_i].mean_F /= n_ants_active;
+        Pop[colony_i].mean_F_franjo /= n_ants_active;
+
+        Pop[colony_i].var_F = sumsquares_F / n_ants_active - 
+            Pop[colony_i].mean_F * Pop[colony_i].mean_F;
+
+        Pop[colony_i].var_F_franjo = sumsquares_F_franjo / n_ants_active - 
+            Pop[colony_i].mean_F_franjo * Pop[colony_i].mean_F_franjo;
+
+    } // end for Colonies
+
+} // end of Calc_F()
+//==============================================================================================================================================
 
 // Calculates the fitness of a colony from the population size and the number of ants working on each task
-// Only observes the second half of the timesteps in a generation, as there is an initialisation effect
+// Only observes the later part of the timesteps in a generation, 
+// beyond t > tau
+// as there is an initialisation effect
 void CalcFitness(Population & Pop, Params & Par)
 {
     sum_Fit = 0;
-    double total = 0;
+
+    double total;
+
+    bool ant_is_idle;
 
     for (unsigned int colony_i = 0; colony_i < Pop.size(); ++colony_i)
     {
         Pop[colony_i].idle = 0;
 
-        total = Pop[colony_i].last_half_acts[0] 
-            + Pop[colony_i].last_half_acts[1];
+        total = 0;
 
+        // calculate total work periods
+        for (int task_i = 0; task_i < Par.tasks; ++task_i)
+        {
+            total += Pop[colony_i].last_half_acts[task_i];
+        }
+        
         if (total == 0)
         {
             Pop[colony_i].fitness =0;
         }
         else if (total > 0)
         {
-            Pop[colony_i].fitness =  total * 
-                pow((Pop[colony_i].last_half_acts[0]/total), Par.beta_fit) * 
-                pow((Pop[colony_i].last_half_acts[1]/total), Par.gamma_fit);
+            Pop[colony_i].fitness =  total;
+
+            for (int task_i = 0; task_i < Par.tasks; ++task_i)
+            {
+                // now multiply by weighted fitness
+                Pop[colony_i].fitness *= 
+                    pow((Pop[colony_i].last_half_acts[task_i]/total), 
+                            Par.fitness_weights[task_i]); 
+            }
         }
 
+        // calculate number of idle ants that have never worked
         for (unsigned int ant_i = 0; 
                 ant_i < Pop[colony_i].MyAnts.size(); ++ant_i)
         {
-            if (Pop[colony_i].MyAnts[ant_i].countacts[0] == 0 
-                    && Pop[colony_i].MyAnts[ant_i].countacts [1] == 0)
+            ant_is_idle = true;        
+
+            for (int task_i = 0; task_i < Par.tasks; ++task_i)
+            {
+                if (Pop[colony_i].MyAnts[ant_i].countacts[task_i] > 0)
+                {
+                    ant_is_idle = false;
+                    break;
+                }
+            }
+
+            if (ant_is_idle)
             {
                 ++Pop[colony_i].idle;
             }
         }
     }
 
+    // find colony with minimum fitness value in population
     int min_fit = Pop[0].ID;
 
     for (unsigned int col = 1; col < Pop.size(); ++col)
@@ -793,12 +1077,14 @@ void CalcFitness(Population & Pop, Params & Par)
         }
     }
 
+    // calculate difference in fitness between every colony and the lowest colony
     for (unsigned int i = 0; i < Pop.size(); ++i)
     {
         Pop[i].diff_fit = Pop[i].fitness - Pop[min_fit].fitness;
         sum_Fit += Pop[i].diff_fit;
     }
 
+    // make cumulative fitness distribution
     for (unsigned int i = 0; i < Pop.size(); ++i)
     {
         Pop[i].rel_fit = Pop[i].diff_fit / sum_Fit;
@@ -812,91 +1098,16 @@ void CalcFitness(Population & Pop, Params & Par)
             Pop[i].cum_fit = Pop[i-1].cum_fit + Pop[i].rel_fit;
         }
     }
+
 } // end of CalcFitness()
 //-------------------------------------------------------------------------------
-
-// Puts workers into categories of low and high response thresholds for data analysis
-void Categorize(Population & Pop)
-{
-    for (unsigned int colony_i = 0; colony_i < Pop.size(); ++colony_i)
-    {   //creating bins
-        Pop[colony_i].LowF[0] = -1;
-        Pop[colony_i].HighF[0] = -0.9;
-        Pop[colony_i].CategF[0] = 0;
-        Pop[colony_i].LowT[0] = 0;
-        Pop[colony_i].HighT[0] = 0.5;
-        Pop[colony_i].CategT1[0] = 0;
-        Pop[colony_i].CategT2[0]=0;
-
-        for (unsigned int index = 1; index < Pop[colony_i].HighF.size(); index++)
-        {
-            Pop[colony_i].LowF[index] = Pop[colony_i].LowF[index-1]+0.1;
-            Pop[colony_i].HighF[index] = Pop[colony_i].HighF[index-1]+0.1;
-            Pop[colony_i].CategF[index] = 0;
-
-            Pop[colony_i].LowT[index]= Pop[colony_i].LowT[index-1]+0.5;
-            Pop[colony_i].HighT[index] = Pop[colony_i].HighT[index-1]+0.5;
-            Pop[colony_i].CategT1[index] = 0;
-            Pop[colony_i].CategT2[index] = 0;
-        }
-
-        // TODO
-        Pop[colony_i].LowF[10] = 0;
-        Pop[colony_i].HighF[9] = 0;
-
-        // relative frequencies
-        if (Pop[colony_i].MyAnts.size() - Pop[colony_i].idle > 0)
-        {
-            for (unsigned int worker = 0; 
-                    worker < Pop[colony_i].MyAnts.size(); ++worker)
-            {
-                for (unsigned int index = 0; 
-                        index < Pop[colony_i].CategF.size(); ++index)
-                {
-                    // specialization
-                    if (Pop[colony_i].MyAnts[worker].F >= Pop[colony_i].LowF[index]
-                            && Pop[colony_i].MyAnts[worker].F < Pop[colony_i].HighF[index])
-                    {
-                        Pop[colony_i].CategF[index] += 1.0/(
-                                (Pop[colony_i].MyAnts.size())-(Pop[colony_i].idle)
-                                );
-                    }
-
-                    //threshold 1
-                    if (Pop[colony_i].MyAnts[worker].threshold[0] >= 
-                            Pop[colony_i].LowT[index]
-                        && 
-                        Pop[colony_i].MyAnts[worker].threshold[0] < 
-                            Pop[colony_i].HighT[index])
-                    {
-                        ++Pop[colony_i].CategT1[index];
-                    }
-
-                    // threshold 2
-                    if (Pop[colony_i].MyAnts[worker].threshold[1] >= 
-                            Pop[colony_i].LowT[index]
-                        && 
-                        Pop[colony_i].MyAnts[worker].threshold[1] < 
-                        Pop[colony_i].HighT[index])
-                    {
-                        ++Pop[colony_i].CategT2[index];
-                    }
-                }  // for category
-            } // for worker
-        } // end if
-    }// end of for colony
-} // end of CategorizeF()
-
-//------------------------------------------------------------------------------
 
 // Draw a parent from the cumulative distribution
 // Randomly selects genotype samples from all colonies based on their fitness (fittest more likely to be chosen)
 int drawParent(int nCol, Population & Pop)
 {
     const double draw = gsl_rng_uniform(rng_global); 
-
-    int cmin = -1;
-    int cmax = nCol - 1;
+    int cmin=-1, cmax=nCol-1;
 
     // binary search of cumulative fitness value
     while (cmax - cmin != 1)
@@ -911,9 +1122,10 @@ int drawParent(int nCol, Population & Pop)
             cmin = cmid;
         }
     }
-    return cmax;
+    return(cmax);
 }// end of drawParent()
-//----------------------------------------------------------------------------------------------------
+
+
 
 //Creates the sexual individuals from a colony.
 //Repeats drawParent until all required samples are collected.
@@ -923,18 +1135,19 @@ void MakeSexuals(Population & Pop, Params & Par)
     parentCol.resize(mySexuals.size());
 
     for (unsigned int ind = 0; ind < mySexuals.size(); ++ind)
-    {
+	{
         //initialize sexuals
         mySexuals[ind].threshold.resize(Par.tasks);
-
-        mySexuals[ind].countacts.resize(0);
+        mySexuals[ind].countacts.clear();
         mySexuals[ind].last_act = Par.tasks;
         mySexuals[ind].curr_act = Par.tasks;
+
         mySexuals[ind].switches = 0;
-        mySexuals[ind].mean_switches = 0;
         mySexuals[ind].F = 0;
         mySexuals[ind].mated = false;
-
+        mySexuals[ind].mated = false;
+        
+        
         // draw a parent colony for each sexual
         parentCol[ind] = drawParent(Pop.size(), Pop);
 
@@ -943,303 +1156,527 @@ void MakeSexuals(Population & Pop, Params & Par)
                 Pop[parentCol[ind]].male, 
                 Par);
 
-    }
+	}// end for ind
 }
-//-------------------------------------------------------------------------------------------
 
 // Create the workers in a new colony.
 // Randomly selects a mother and father from the sexual individuals of all colonies and combines their genotypes
-void MakeColonies(Population &Pop, Params &Par)
+void MakeColonies(Population &Pop, Params &Par, int generation)
 {
     int mother, father;
 
+    // file to write founders from the last generation
+    // to, if simulation may be continued at a later time
+    static ofstream lastgen;
+
     for (unsigned int col = 0; col < Pop.size(); ++col)
-    {
+	{
         do
         {
             mother = gsl_rng_uniform_int(rng_global, mySexuals.size());
             father = gsl_rng_uniform_int(rng_global, mySexuals.size());
         }
-        while (mother == father || 
-                mySexuals[mother].mated || 
-                mySexuals[father].mated);
+        while
+		(mother == father 
+         || mySexuals[mother].mated==true 
+         || mySexuals[father].mated==true);
+
 
         mySexuals[mother].mated = true;
         mySexuals[father].mated = true;
 
         Pop[col].queen = mySexuals[mother]; 
-        Pop[col].male = mySexuals[father]; // copy new males and females
+        Pop[col].male = mySexuals[father]; 
 
-    } // end for Colonies
-} // end MakeColonies()
-//-----------------------------------------------------------------------------------------------------
+	} // end for Colonies
 
-//Defines the auxiliary function compare_vector_elements, which sorts vector elements.
-//Used because the default C++ sorting function is inflexible.
-bool compare_vector_elements(vector<int>anyvector, int size_vector)
-{
-    bool mybool=false;
 
-    for (int m = 0; m < size_vector-1; ++m) 
+    // if last generation, write out the founders to a file 
+    if (generation - simstart_generation == Par.maxgen - 1) 
     {
-        for (int n = m+1; n < size_vector; ++n)
+        lastgen.open("lastgen.txt");
+        lastgen << simpart + 1 << endl;
+        lastgen << generation + 1 << endl;
+
+        for (unsigned int col = 0; col < Pop.size(); ++col)
         {
-            if (anyvector[m] == anyvector[n])
+            for (int task = 0; task < Par.tasks; ++task)
             {
-                mybool=false;
-            
-                break;
+                lastgen << Pop[col].male.threshold[task] << endl;	
             }
-            else
+            for (int task = 0; task < Par.tasks; ++task)
             {
-                mybool=true;
+                lastgen << Pop[col].queen.threshold[task] << endl;	
             }
         }
     }
+} // end MakeColonies()
 
-    return(mybool);
+// give names to each of the datafiles
+void NameDataFiles(
+        string & data1, 
+        string &data2, 
+        string &data3, 
+        string &data4, 
+        string &dataant)
+{
+    stringstream tmp;
+    tmp << "data_work_alloc_" << simpart << ".txt";
+    data1 = tmp.str();
+
+    stringstream tmp2;
+    tmp2 << "threshold_distribution_" << simpart << ".txt";
+    data2 = tmp2.str();
+
+    stringstream tmp3;
+    tmp3 << "f_dist_" << simpart << ".txt";
+    data3 = tmp3.str();
+
+    stringstream tmp4;
+    tmp4 << "branch.txt";
+    data4 = tmp4.str();
+
+    stringstream tmp5;
+    tmp5 << "ant_beh_" << simpart << ".txt";
+    dataant = tmp5.str();
+}
+
+// see whether we need to start the simulation from a
+// previous instantiation
+void Start_Simulation_From_Previous(Params & Par, Population & Pop) 
+{
+    // if the lastgen.txt file is present
+    // this simulation has already got a start and we need
+    // to continue it 
+    if (FileExists("lastgen.txt"))
+    {
+        ifstream inp("lastgen.txt");
+
+        // use this to initiate the queens, kings, etc
+        StartFromLast(inp, Par, Pop);
+    }
+	else 
+    {
+        simpart = 1;
+        simstart_generation = 0; 
+    }
+}
+
+void Update_Col_Data(
+        int step,  // current timestep
+        Population & Pop, 
+        Params & Par)
+{
+	if (step >= Par.tau) 
+    {
+        for (unsigned int col = 0; col < Pop.size(); ++col)
+        {
+            for (int task = 0; task < Par.tasks; ++task)
+            {
+                Pop[col].last_half_acts[task] += 
+                    Pop[col].workfor[task]/Par.alfa[task];
+                
+                Pop[col].mean_work_alloc[task] += 
+                    Pop[col].workfor[task] / Par.alfa[task];
+            }	
+        }
+    }
+}
+
+void Write_Headers(
+        ofstream &header_file,
+        ofstream &data_1gen,
+        Params &Par)
+{
+    header_file << "Gen" << "\t" 
+    << "Col"  << "\t";
+
+    data_1gen << "Time" << ";" 
+		<< "Col" << ";";
+
+    for (int task_i = 0; task_i < Par.tasks; ++task_i)
+    {
+        header_file << "NumActs" << (task_i + 1) << "\t"; 
+        data_1gen << "Stim" << (task_i + 1) << "\t"; 
+    }
+    
+    for (int task_i = 0; task_i < Par.tasks; ++task_i)
+    {
+        header_file <<  "Workalloc" << (task_i + 1) << "\t";
+        data_1gen << "Workers" << (task_i + 1) << "\t"; 
+    }
+
+    header_file << "Idle"<< "\t" 
+    << "Inactive" << "\t"
+    <<"Fitness" << "\t";
+    
+    for (int task_i = 0; task_i < Par.tasks; ++task_i)
+    {
+        header_file <<  "Endstim" << (task_i + 1) << "\t";
+    }
+
+    header_file << "mean_switches" << "\t"
+    << "mean_workperiods" << "\t";
+
+    for (int task_i = 0; task_i < Par.tasks; ++task_i)
+    {
+        header_file <<  "last_half_acts" << (task_i + 1) << "\t";
+    }
+
+    header_file << endl;
+    
+	data_1gen << "Fitness" << ";" 
+		<< "Mean_F"<< ";" 
+		<< "Mean_F_franjo" << endl;
+}
+
+//==========================================================================================================
+//write out data for graphs 
+//==========================================================================================================
+void Write_Col_Data(
+        ofstream & mydata, 
+        Params & Par, 
+        Population & Pop, 
+        int gen, 
+        int colony)
+{
+	mydata << gen << "\t" << colony << "\t";
+
+	for (int task = 0; task < Par.tasks; ++task)
+    {
+		    mydata << Pop[colony].numacts[task] << "\t";
+    }
+	for (int task = 0; task < Par.tasks; ++task)
+    {
+		    mydata << Pop[colony].mean_work_alloc[task] << "\t"; 				
+    }
+
+	mydata << Pop[colony].idle 
+            << "\t" << Pop[colony].inactive 
+            << "\t" << Pop[colony].fitness;
+
+	for (int task = 0; task < Par.tasks; ++task)
+    {
+            mydata << "\t" << Pop[colony].stim[task]; 
+    }
+
+    mydata << "\t" << Pop[colony].mean_switches 
+            << "\t" << Pop[colony].mean_workperiods;
+
+	for (int task = 0; task < Par.tasks; ++task)
+    {
+            mydata << "\t" << Pop[colony].last_half_acts[task]; 
+    }
+
+    mydata << endl;  
 }
 //------------------------------------------------------------------------------------------------------
 
-//The main body of the program.
-//Starts by creating the output streams for the results.
+void Write_Thresholds_Spec(
+        ofstream & data_thresh,
+        ofstream & data_f,
+        Params & Par,
+        Population & Pop, 
+        int gen,
+        int colony)
+{
+	 // output only thresholds of foundresses and mean specialization 
+	data_thresh << gen; 
+
+    double p_i[Par.tasks];
+
+    double total_acts = 0;
+
+    // calculate denominator for the specialization measure
+    double denomin = 0;
+
+	for (int task = 0; task < Par.tasks; ++task)
+    {
+        data_thresh << ";" << Pop[colony].male.threshold[task];
+
+        total_acts += Pop[colony].numacts[task];
+        p_i[task] = Pop[colony].numacts[task];
+    }
+
+	for (int task = 0; task < Par.tasks; ++task)
+    {
+        data_thresh << ";" << Pop[colony].queen.threshold[task];
+
+        p_i[task] /= total_acts;
+
+        denomin += p_i[task]*p_i[task];
+    }
+
+	assert(Pop[colony].numacts[0] > 0);
+	assert(Pop[colony].numacts[1] > 0);
+
+	//cout << "denominator :" << denomin << endl;
+
+	data_f << gen <<";" 
+            << Pop[colony].mean_F <<";"
+            << Pop[colony].mean_F_franjo/denomin << ";" 
+	    	<< Pop[colony].mean_switches << ";" 
+            << Pop[colony].mean_workperiods << ";"
+	    	<< Pop[colony].var_F << ";" 
+            << Pop[colony].var_F_franjo << ";"
+	    	<< Pop[colony].var_switches <<";" 
+            << Pop[colony].var_workperiods << endl;
+} 
+
+// keep informed of whether branching occurred
+void Write_Branching(ofstream & afile, Params & Par, int yesno)
+{
+	afile << Par.mutp << ";" 
+		<< Par.mutstep << ";" 
+		<< Par.timecost << ";" 
+		<< yesno << endl;	
+}	
+
+// check whether there is specailization
+bool Check_Spec(Population & Pop)
+{
+	bool mybool=false;
+	int count_cols=0; // count colonies with less than 0.75 average specialization 
+	for (unsigned int col=0; col<Pop.size(); col++)
+		{
+	        	if(Pop[col].mean_F<0.75) 
+				count_cols +=1;	
+
+		}
+
+        if (double(count_cols)/Pop.size() < 0.4) mybool=true; // if less than 40% of colonies have low specialization
+	
+	return mybool; 
+} // end of Check_Spec
+
+//=====================================================================================================
+// to use in case you want the simulation to stop if specialization is present 
+void StopIfSpec(
+        Population & Pop, 
+        int generation, 
+        Params & Par, 
+        ofstream & file1, 
+        ofstream &file2, 
+        ofstream & file3, 
+        ofstream &file4, 
+        int eq_steps, 
+        string filename)
+{ 
+    if (Check_Spec(Pop))
+    {
+        file4.open(filename.c_str());
+        int branch = 1;
+
+        for (unsigned int col = 0; col < Pop.size(); ++col)
+        {
+            for (int task = 0; task < Par.tasks; ++task)
+            {
+                Pop[col].mean_work_alloc[task] /= eq_steps;
+            }
+            
+            Write_Col_Data(file1, Par, Pop, generation, col);
+          
+            Write_Thresholds_Spec(file2, file3, Par, Pop, generation, col);
+        
+        }
+    
+        Write_Branching(file4, Par, branch);	
+        exit (1);
+    }
+    else if (generation == simstart_generation + Par.maxgen-1)
+    {
+        file4.open(filename.c_str());
+    
+        int branch = 0;	
+        for (unsigned int col = 0; col < Pop.size(); col++)
+        {
+            for (int task=0; task<Par.tasks; task++)
+            {
+                Pop[col].mean_work_alloc[task]/=eq_steps;
+            }
+                
+            Write_Col_Data(file1, Par, Pop, generation, col);
+              
+                 // output only thresholds of foundresses and mean specialization 
+                    
+            Write_Thresholds_Spec(file2, file3, Par, Pop, generation, col);
+            
+        }
+
+        Write_Branching(file4, Par, branch);	
+    }
+
+} // end StopIfSpec
+
 int main(int argc, char* argv[])
 {
-    Params myPars;
+	Params myPars;
 
-    ifstream inp("params.txt");
-
-    myPars.InitParams(inp);
-
-    ShowParams(myPars);
-
+	ifstream inp("params.txt");
+	myPars.InitParams(inp);
+	ShowParams(myPars);
+	
     // set up the random number generators
     // (from the gnu gsl library)
     gsl_rng_env_setup();
     T = gsl_rng_default;
     rng_global = gsl_rng_alloc(T);
     gsl_rng_set(rng_global, myPars.seed);
-    
-    static ofstream out; 
-    static ofstream out2;
-    static ofstream out3;
-    static ofstream out4;
 
-    if(myPars.Col>1) 
+    // also set the seed to be used by random_shuffle
+    srand(myPars.seed);
+
+    // initialize the metapopulation
+	Population MyColonies;
+
+    // initiliaze the founders
+	InitFounders(MyColonies, myPars);
+	
+	
+	// code that checks which run this is
+	// is lastgen.txt present y/n
+    Start_Simulation_From_Previous(myPars, MyColonies);
+
+    // the datafiles
+	string datafile1, 
+           datafile2, 
+           datafile3, 
+           datafile4, 
+           dataants;
+
+    // name the files
+	NameDataFiles(datafile1, datafile2, datafile3, datafile4, dataants);
+
+	static ofstream out; 
+	static ofstream out2;
+	static ofstream out5;
+	static ofstream out_f;
+    static ofstream branching;
+    static ofstream header1;
+	static ofstream out_ants;
+	
+    out.open(datafile1.c_str());
+    header1.open("header.txt");
+    out5.open("data_1gen.txt");
+
+    // write the headers to various data files
+    Write_Headers(header1, out5, myPars);
+
+    // open the remaining data files
+	out2.open(datafile2.c_str());
+	out_f.open(datafile3.c_str());    
+	    
+	out_ants.open(dataants.c_str()); 
+
+    // evolutionary time
+	for (int g = simstart_generation; 
+            g < simstart_generation + myPars.maxgen; ++g)
     {
-        out.open("data_work_alloc.txt");
-        out3.open("stimulus_acts.txt");
-        
-        out << "Gen" << "\t" 
-            << "Col"  << "\t" 
-            << "A"  << "\t" 
-            << "B"  << "\t" 
-            << "NumActs1" << "\t" 
-            << "NumActs2" << "\t" 
-            << "WorkAlloc1" << "\t" 
-            << "WorkAlloc2" <<"\t" 
-            << "Idle"<< "\t" 
-            << "Fitness" << "\t" 
-            << "Switches" << "\t" 
-            << "Mean_F" << "\t" 
-            << "Mean_F_franjo" <<endl; 
-
-        out3 << "Gen" << ";" << "Time" << ";" << "Col" << ";" << "Stim1" << ";" << "Workers1" << ";" << "Stim2" << ";" << "Workers2" << ";" << "Fitness" << endl;
-    }
-    else 
-    {
-        out4.open("data_1gen.txt");
-
-        out4 << "Time" << ";" << "Col" << ";" << "Stim1" << ";" << "Stim2" << ";" << "Workers1" << ";" << "Workers2" << ";" << "Fitness" << ";" 
-             << "Mean_F" << ";" << "Mean_F_franjo" << endl;
-    } 
-
-    out2.open("threshold_distribution.txt");
-    
-    
-    //headers for data
-    Population MyColonies;
-    InitFounders(MyColonies, myPars);
-
-    for (int g = 0; g <= myPars.maxgen; ++g)
-    {
+        // initialize all colonies in this generation
         Init(MyColonies, myPars);
         
         double equil_steps=0;
 
-        // Picks ten random colonies as founders and shuffles them:
-        vector<int>random_colonies(10);
-
-#ifdef DEBUG
-    cout << MyColonies.size() <<endl;
-    cout <<myPars.maxtime << endl;
-#endif
-
         // Updates ant behaviour for each timestep (ecological timescale)
-        for (int k = 0; k < myPars.maxtime; ++k)
+        for (int k = 0; k < myPars.maxtime; k++)
         {
+            // update all the ants in each colony
             UpdateAnts(MyColonies, myPars);
-			//stochsine
-			myPars.gensdone = g;
-			myPars.stepsdone = k;
+
+            // update all stimulus levels of each colony
             UpdateStim(MyColonies, myPars);
-       
-            if (k >= myPars.maxtime/2)
-            {
-                for (unsigned int col = 0; col < MyColonies.size(); ++col)
-                {
-                    for (int task=0; task<myPars.tasks; ++task)
-                    {
-                        MyColonies[col].last_half_acts[task] += 
-                            MyColonies[col].workfor[task]/myPars.alfa[task];
-                    }
-                }	
-            }
 
-            // Calculate work allocation for the last fifty timesteps
-            if (k >= myPars.maxtime-51) 
-            {
-                equil_steps +=1;
+            // calculate specialization values
+            Calc_F(MyColonies, myPars); 
 
-                for (unsigned int col = 0; col < MyColonies.size(); col++)
-                {
-                    for (int task=0; task<myPars.tasks; task++)
-                    {
-                        MyColonies[col].mean_work_alloc[task] += 
-                            MyColonies[col].workfor[task]/myPars.alfa[task];
-                    }
-                }
-            }
-            
-			
-			// Calculates fitness, categorises ants 
-            // into low/high threshold categories, giving them as an output
-            Calc_F(MyColonies, myPars);
+            // update all the fitness data etc
+            Update_Col_Data(k, MyColonies, myPars);
 
-
-
-            // write the values of the stimulus levels for each colony 
-            // to "stimulus_acts.txt"
-            //
-            // only output stimulus every nth timestep to prevent datafiles becoming
-            // massive. If you want to output it every timestep, set
-            // k % 1
-            if (g >= myPars.maxgen*0.75 && k % 10 == 0 && myPars.Col > 1)
-            {
-                // loop through colonies
-                for (unsigned int col = 0; col < MyColonies.size(); ++col)
-                {
-                    // write generation, timestep and colonynumber to file
-                    out3 << g << ";" 
-                        << k << ";" 
-                        << col << ";";
-
-                    // write stimulus levels and worker numbers to file
-                    for (int task = 0; task < myPars.tasks; ++task)
-                    {
-                        out3 << MyColonies[col].stim[task] << ";"
-                                << MyColonies[col].workfor[task] << ";";
-                    }
-
-                    // calculate colony level fitness and write that to a file
-                    out3 << MyColonies[col].fitness << endl;
-                }
-
-            } // done writing stimulus and fitness 
-
-
+            ++equil_steps;
+           
+            // last timestep before reproduction
             if (k == myPars.maxtime-1)
             {
+                // calculate fitness of the colonies
                 CalcFitness(MyColonies, myPars);
 
-                if ((g <= 100 || g % 10 == 0) && myPars.Col > 1)
+                // output the data (only at the start or every 100th
+                // generation
+                if ((g <= 100 || g % 100==0))
                 {
-                    for (unsigned int col = 0; col < MyColonies.size(); ++col)
+                    for (unsigned int col = 0; 
+                            col < MyColonies.size(); ++col)
                     {
-                        for (int task = 0; task < myPars.tasks; ++task)
-                        {
-                            MyColonies[col].mean_work_alloc[task]/=equil_steps;
-                        }
-
-                        out << g << "\t" << col << "\t" << myPars.A << "\t" << myPars.B << "\t"; 
-
-                        for (int task = 0; task < myPars.tasks; ++task) 
-                        {
-                            out << MyColonies[col].numacts[task] << "\t";
-                        }
-
-                        for (int task = 0; task < myPars.tasks; ++task)
-                        {
-                            out << MyColonies[col].mean_work_alloc[task] << "\t"; 
-                        }
-
-                        out << MyColonies[col].idle << 
-                            "\t" << MyColonies[col].fitness << 
-                            "\t" << MyColonies[col].mean_switches << 
-                            "\t" << MyColonies[col].mean_F <<
-                            "\t" << MyColonies[col].mean_F_franjo << endl;
-                 
-                        
-                        // output only thresholds of foundresses and mean specialization 
-                        out2 << g << ";";
-
                         for (int task=0; task<myPars.tasks; ++task)
                         {
-                            out2 << MyColonies[col].male.threshold[task] << ";"; 
+                            MyColonies[col].mean_work_alloc[task] /= 
+                                equil_steps;
                         }
+                           
+                        Write_Col_Data(out, myPars, MyColonies, g, col);
+                          
+                         // output only thresholds of foundresses and mean specialization 
+                        Write_Thresholds_Spec(out2, 
+                                out_f, 
+                                myPars, 
+                                MyColonies, 
+                                g, 
+                                col);
+                         
+                    } // end of for colonies
+                } // end if generations are right
+            } // end if k=maxtime
 
-                        for (int task=0; task<myPars.tasks; ++task)
-                        {
-                            out2 << MyColonies[col].queen.threshold[task] << ";"; 
-                        }
-
-                        out2 << MyColonies[col].mean_F <<";" 
-                            << MyColonies[col].mean_F_franjo << endl;
-                            
-                    }
-                } // if (g<=100...
-            }
-             
-			// Reduced version of the code that only runs for 1 colony, to test the simulation without high system requirements
-            if (myPars.Col == 1)
+            if (g == simstart_generation + myPars.maxgen - 1) 
             {
                 for (unsigned int col = 0; col < MyColonies.size(); ++col)
                 {
-                    out4 << k << ";" << col << ";"; 
+                    double p1 = (double) MyColonies[col].numacts[0] / 
+                        (MyColonies[col].numacts[0] + 
+                         MyColonies[col].numacts[1]);
+            
+                    double p2 = (double)MyColonies[col].numacts[1] / 
+                        (MyColonies[col].numacts[0] + 
+                         MyColonies[col].numacts[1]);
+            
+                    double denomin = p1*p1 + p2*p2;
 
-                    for (int task=0; task<myPars.tasks; ++task)
+                    out5 << k << ";" << col << ";"; 
+
+                    for (int task=0; task<myPars.tasks; task++)
                     {
-                        out4 <<MyColonies[col].stim[task] << ";"; 
+                         out5 <<MyColonies[col].stim[task] << ";"; 
                     }
 
                     for (int task=0; task<myPars.tasks; ++task)
                     {
-                        out4 << MyColonies[col].workfor[task]/myPars.alfa[task] << ";";
+                         out5 << MyColonies[col].workfor[task]/
+                             myPars.alfa[task] << ";";
                     }
 
-                    out4 << MyColonies[col].fitness << ";" 
-                        << MyColonies[col].mean_F << ";" 
-                        << MyColonies[col].mean_F_franjo << endl;	     
-                    
-//                    for (unsigned int ind = 0; ind < MyColonies[col].MyAnts.size(); ++ind)
-//                    {
-//                        out2 << g << ";";
-//
-//                        for (int task=0; task<myPars.tasks; ++task)
-//                        {
-//                            out2 << MyColonies[col].MyAnts[ind].threshold[task] << ";"; 
-//                        }
-//                        
-//                        out2 << MyColonies[col].MyAnts[ind].F << ";" 
-//                            << MyColonies[col].MyAnts[ind].F_franjo <<endl;
-//                    }
-                }
-            }
-        } // for (int k = 0; k < myPars.maxtime; ++k)
+                    out5 << MyColonies[col].fitness << ";" << 
+                            MyColonies[col].mean_F << ";" << 
+                            MyColonies[col].mean_F_franjo/denomin << endl; 
 
-        // now make sexuals and new colonies
+                    if (k == myPars.maxtime -1)
+                    {	
+                        for (unsigned int ant=0; 
+                                ant < MyColonies[col].MyAnts.size(); ++ant)
+                        {
+                            out_ants << col << ";" 
+                                << ant << ";" 
+                                << MyColonies[col].MyAnts[ant].countacts[0] << ";" 
+                                << MyColonies[col].MyAnts[ant].countacts[1] << ";"
+                                << MyColonies[col].MyAnts[ant].switches << ";"
+                                << MyColonies[col].MyAnts[ant].workperiods << endl;  
+                        }
+                    }
+                }// endfor (unsigned int col
+            } // end if if (g == simstart_generation + myPars.maxgen - 1)   
+        } // end for (int k = 0; k < myPars.maxtime
+
         MakeSexuals(MyColonies, myPars);
-        MakeColonies(MyColonies, myPars);
+        MakeColonies(MyColonies, myPars, g);
 
-    } // end for (int g = 0; g < myPars.maxgen; ++g)
-} // end main
+    } // end for (int g = simstart_generation;
+} // end of main()
