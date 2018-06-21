@@ -1428,9 +1428,6 @@ void Write_Thresholds_Spec(
         denomin += p_i[task]*p_i[task];
     }
 
-	assert(Pop[colony].numacts[0] > 0);
-	assert(Pop[colony].numacts[1] > 0);
-
 	//cout << "denominator :" << denomin << endl;
 
 	data_f << gen <<";" 
