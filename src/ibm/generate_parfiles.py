@@ -235,27 +235,40 @@ maxtime = 3000
 # parameter, just add them to the list, i.e., parameter1 = [ value1, value2, ..., valuen ]
 pardict = OrderedDict()
 
+maxtime = 100
+
 pardict["N"]=[ 500] # number of workers / colony
-pardict["Col"]=[ 500] # number of colonies
-pardict["maxtime"]=[ 500] # time steps work is performed before reproduction
-pardict["meanT11"]=[ 5.0 ] # mean threshold for each task
-pardict["meanT12"]=[ 1.0 ] # mean threshold for each task
-pardict["meanT21"]=[ 1.0 ] # mean threshold for each task
-pardict["meanT22"]=[ 5.0 ] # mean threshold for each task
+pardict["Col"]=[ 1000] # number of colonies
+pardict["maxtime"]=[maxtime] # time steps work is performed before reproduction
+pardict["meanT1"]=[ 10.0 ] # mean threshold for each task
+pardict["meanT2"]=[ 10.0 ] # mean threshold for each task
+pardict["delta1"]=[ 1.0 ] # fixed increase in stimulus
+pardict["delta2"]=[ 1.0 ] # fixed increase in stimulus
 pardict["alfa1"]=[ 3.0 ] # maximum work efficiency task 1
 pardict["alfa2"]=[ 3.0 ] # maximum work efficiency task 1
+pardict["beta1"]=[ 0.0 ] # maximum work efficiency task 1
+pardict["beta2"]=[ 0.0 ] # maximum work efficiency task 1
+pardict["exp_task_1"]=[0.5] # exponent task 1 
+pardict["exp_task_2"]=[0.5] # exponent task 2 
 pardict["p"]=[ 0.2] # quitting probability
 pardict["mutp"]=[0.1] # mutation probability
 pardict["mutstd"]=[0.1] # mutation probability
 pardict["recomb"]=[0,0.5] # mutation probability
 pardict["maxgen"]=[1000] # number of generations 
-pardict["beta_fit"]=[0.5] # exponent task 1 
-pardict["gamma_fit"]=[0.5] # exponent task 2 
-pardict["timecost"]=[10] # number of timesteps a worker has to wait before engaging in another task (this is a cost of switching)
+
+# number of timesteps a worker has to wait 
+# before engaging in another task (this is a cost of switching)
+pardict["timecost"]=[10] 
+
+# initial value of the stimulus
+pardict["initStim"]=[0] 
+pardict["p_wait"]=[1.0] 
+pardict["tau"]=[maxtime/2] 
 pardict["A"]=[0] #Deterministic factor
 pardict["B"]=[0] #Stochastic factor  
-pardict["genspercycle"]=[10] #Generations per environmental cycle      
-pardict["randommax"]=[0, 0.001, 0.01, 0.1, 1, 10] #Maximum value of positive random number
+pardict["genspercycle"]=[10, 20, 30, 40, 50] #Generations per environmental cycle      
+#pardict["randommax"]=[0, 0.001, 0.01, 0.1, 1, 10] #Maximum value of positive random number
+pardict["randommax"]=[0] #Maximum value of positive random number
 
 
 # make all parameter combinations
