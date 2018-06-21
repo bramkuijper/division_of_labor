@@ -242,8 +242,10 @@ pardict["Col"]=[ 1000] # number of colonies
 pardict["maxtime"]=[maxtime] # time steps work is performed before reproduction
 pardict["meanT1"]=[ 10.0 ] # mean threshold for each task
 pardict["meanT2"]=[ 10.0 ] # mean threshold for each task
-pardict["delta1"]=[ 1.0 ] # fixed increase in stimulus
-pardict["delta2"]=[ 1.0 ] # fixed increase in stimulus
+pardict["delta1_baseline"]=[ 1.0 ] # fixed increase in stimulus
+pardict["delta2_baseline"]=[ 1.0 ] # fixed increase in stimulus
+pardict["delta1"]=[ 0.0 ] # fixed increase in stimulus
+pardict["delta2"]=[ 0.0 ] # fixed increase in stimulus
 pardict["alfa1"]=[ 3.0 ] # maximum work efficiency task 1
 pardict["alfa2"]=[ 3.0 ] # maximum work efficiency task 1
 pardict["beta1"]=[ 0.0 ] # maximum work efficiency task 1
@@ -254,7 +256,7 @@ pardict["p"]=[ 0.2] # quitting probability
 pardict["mutp"]=[0.1] # mutation probability
 pardict["mutstd"]=[0.1] # mutation probability
 pardict["recomb"]=[0,0.5] # mutation probability
-pardict["maxgen"]=[1000] # number of generations 
+pardict["maxgen"]=[10000] # number of generations 
 
 # number of timesteps a worker has to wait 
 # before engaging in another task (this is a cost of switching)
@@ -263,9 +265,9 @@ pardict["timecost"]=[10]
 # initial value of the stimulus
 pardict["initStim"]=[0] 
 pardict["p_wait"]=[1.0] 
-pardict["tau"]=[maxtime/2] 
-pardict["A"]=[0] #Deterministic factor
-pardict["B"]=[0] #Stochastic factor  
+pardict["tau"]=[int(maxtime/2)] 
+pardict["A"]=[0.0] #Deterministic factor
+pardict["B"]=[0.0] #Stochastic factor  
 pardict["genspercycle"]=[10, 20, 30, 40, 50] #Generations per environmental cycle      
 #pardict["randommax"]=[0, 0.001, 0.01, 0.1, 1, 10] #Maximum value of positive random number
 pardict["randommax"]=[0] #Maximum value of positive random number

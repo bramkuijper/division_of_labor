@@ -50,14 +50,15 @@ struct Params
     int timecost;
 
     double mutp;//mutation probability
-    double mutstep; // standard deviation of the mutational distribution 
+    double mutstd; // standard deviation of the mutational distribution 
 
     double initStim; // initial stimulus value
     double p_wait; // probability that ant has to wait c time steps before switching
     int tau; // time step from which fitness is counted
 
     vector<double> meanT; // mean thresholds
-    vector<double> delta; // mean stimulus increases
+    vector<double> delta; // variable to keep current stimulus increase level
+    vector<double> deltabaseline; // baseline increase in delta
 
     // efficiency with which workers perform 
     // tasks (see Bonabeau et al 1996 eq. 3)
@@ -78,6 +79,8 @@ struct Params
 	double B; //Stochastic factor
 	int genspercycle; //Generations per environmental cycle
 	int randommax; //Maximum value of positive random number
+	int gensdone; //Generations completed
+	int stepsdone; //Timesteps completed in current generation
   
 
     // function to initialize the parameters from the parameter
@@ -162,7 +165,7 @@ int simpart;
 istream & Params::InitParams(istream & in)
 {
     // set the number of tasks to 2
-    tasks = 2;    
+    tasks = 2;
 
     // allocate space in vectors
     meanT.reserve(tasks);
@@ -186,6 +189,14 @@ istream & Params::InitParams(istream & in)
         meanT.push_back(tmp);
     }
 
+    // read in the deltas
+    // this will change with stochsine TODO 
+    for (int i = 0; i < tasks; ++i) 
+    {    
+        in >> tmp ; 
+        deltabaseline.push_back(tmp);
+    }
+    
     // read in the deltas
     // this will change with stochsine TODO 
     for (int i = 0; i < tasks; ++i) 
@@ -220,7 +231,7 @@ istream & Params::InitParams(istream & in)
 
     in >> p >>
         mutp >>
-        mutstep >>
+        mutstd >>
         recomb >>
         maxgen >>
         timecost>>
@@ -233,7 +244,6 @@ istream & Params::InitParams(istream & in)
     B >> //Stochastic factor
     genspercycle >> //Generations per environmental cycle
     randommax >> //Maximum value of positive random number
-
     seed;
 
     return(in);
@@ -301,6 +311,11 @@ void ShowParams(Params & Par)
      {
         cout << "Delta " << task << "\t"  << Par.delta[task] << endl;
      }
+     
+     for (int task = 0; task < Par.tasks; ++task)
+     {
+        cout << "Delta" << task << "baseline\t"  << Par.deltabaseline[task] << endl;
+     }
  
      for (int task = 0; task < Par.tasks; ++task)
      {
@@ -325,6 +340,7 @@ void ShowParams(Params & Par)
     cout << "Max gen " <<  Par.maxgen << endl;
     cout << "seed " << Par.seed << endl;
     cout << "timecost " << Par.timecost << endl;
+    cout << "tau " << Par.tau << endl;
     cout << "Deterministic Factor A " << Par.A << endl;
     cout << "Stochastic Factor B " << Par.B << endl;
     cout << "Generations per Cycle " << Par.genspercycle << endl;
@@ -408,7 +424,7 @@ void Inherit(Ant &Daughter, Ant &Mom, Ant &Dad, Params &Par)
         allelic_value = inherit_from_mom ? Mom.threshold[task] : Dad.threshold[task];
 
         // mutate it
-        allelic_value = Mutate(allelic_value, Par.mutp, Par,mutstd);
+        allelic_value = Mutate(allelic_value, Par.mutp, Par.mutstd);
 
         // assign it to daughter
         Daughter.threshold[task] = allelic_value;
@@ -451,8 +467,7 @@ void InitAnts(Ant & myAnt, Params & Par, Colony & myCol)
     myAnt.curr_act = Par.tasks; // 0 = task 1, 1 = task 2, etc, n = idle
     myAnt.switches = 0; // swich counter of switches to 0
     myAnt.workperiods=0;
-    myAnt.F = 10;
-    myAnt.F_franjo = 10;
+    myAnt.F = 0;
     myAnt.mated = false;
     myAnt.count_time=0;
 }
@@ -647,10 +662,10 @@ void WantTask(Params Par, Colony & anyCol, Ant & anyAnt)
 	{
         // add random noise to both threshold and stimulus
         double stim_noise = anyCol.stim[task_i] + 
-            gsl_rng_ran_gaussian(rng_global,1.0);
+            gsl_ran_gaussian(rng_global,1.0);
 
         double t_noise =  anyAnt.threshold[task_i] + 
-            gsl_rng_ran_gaussian(rng_global,1.0);
+            gsl_ran_gaussian(rng_global,1.0);
 
         if (stim_noise < 0)
         {
@@ -710,7 +725,7 @@ void EvalTaskSwitch (Params & Par, Colony & anyCol, Ant & anyAnt, int myjob)
     {
         // find out whether ant cannot switch 
         // to a different ask but has to wait
-        if (gsl_rng_uniform(rng_r) <= Par.p_wait
+        if (gsl_rng_uniform(rng_global) <= Par.p_wait
                 && anyAnt.count_time < Par.timecost)    
         {
             anyAnt.curr_act = Par.tasks; // stays idle for as long as count_time<timecost    
@@ -845,20 +860,23 @@ void UpdateAnts(Population & Pop, Params & Par)
 //Creates value for delta with a stochastic sine wave (Botero et al. 2015)
 void Stochsine(Params & Par)
 {
-Par.delta =  //plus one for baseline stimulus increase
-1+ (Par.A  * sin((2 *
+    for (int task_i = 0; task_i < Par.tasks; ++task_i)
+    {
+        Par.delta[task_i] =  //plus one for baseline stimulus increase
+            Par.deltabaseline[task_i] + (Par.A  * sin((2 *
 
-	//pi
-	3.14159265358979323846 *
+            //pi
+            M_PI *
 
-	//Calculate cumulative timesteps
-	((Par.maxtime*Par.gensdone) + Par.stepsdone)
+            //Calculate cumulative timesteps
+            ((Par.maxtime * Par.gensdone) + Par.stepsdone)
 
-	) / Par.maxtime* Par.genspercycle))
-	+ (Par.B *
+            ) / Par.maxtime* Par.genspercycle))
+            + (Par.B *
 
-	//Random number between 0 and randdommax
-	gsl_rng_uniform_pos(rng_global) * Par.randommax);
+            //Random number between 0 and randdommax
+            gsl_rng_uniform_pos(rng_global) * Par.randommax);
+    }
 }
 
 
@@ -914,6 +932,9 @@ void Calc_F(Population & Pop, Params & Par) // calculate specialization
         Pop[colony_i].mean_switches = 0; 
         Pop[colony_i].mean_workperiods = 0; 
 
+        double F_franjo;
+        double mean_F_franjo = 0;
+
         double sumsquares_F = 0;
         double sumsquares_F_franjo = 0;
 
@@ -958,17 +979,17 @@ void Calc_F(Population & Pop, Params & Par) // calculate specialization
                 // F is between -1 and 1
                 Pop[colony_i].MyAnts[ant_i].F = 1 - 2*C;
                 // F_franjo is between 0 and 1
-                Pop[colony_i].MyAnts[ant_i].F_franjo = 1-C;
+                //
+                F_franjo = 1-C;
      
                 // sum all values of F to calculate averages
                 Pop[colony_i].mean_F += Pop[colony_i].MyAnts[ant_i].F;
-                Pop[colony_i].mean_F_franjo += Pop[colony_i].MyAnts[ant_i].F_franjo;
+                mean_F_franjo += F_franjo;
 
                 sumsquares_F += Pop[colony_i].MyAnts[ant_i].F *
                     Pop[colony_i].MyAnts[ant_i].F;
 
-                sumsquares_F_franjo += Pop[colony_i].MyAnts[ant_i].F_franjo *
-                    Pop[colony_i].MyAnts[ant_i].F_franjo;
+                sumsquares_F_franjo += F_franjo * F_franjo;
 
                 // count this ant as an active one (as it has worked
                 // at least once)
@@ -1427,7 +1448,7 @@ void Write_Thresholds_Spec(
 void Write_Branching(ofstream & afile, Params & Par, int yesno)
 {
 	afile << Par.mutp << ";" 
-		<< Par.mutstep << ";" 
+		<< Par.mutstd << ";" 
 		<< Par.timecost << ";" 
 		<< yesno << endl;	
 }	
@@ -1577,11 +1598,14 @@ int main(int argc, char* argv[])
         
         double equil_steps=0;
 
+	    myPars.gensdone = g;
+
         // Updates ant behaviour for each timestep (ecological timescale)
         for (int k = 0; k < myPars.maxtime; k++)
         {
             // update all the ants in each colony
             UpdateAnts(MyColonies, myPars);
+			myPars.stepsdone = k;
 
             // update all stimulus levels of each colony
             UpdateStim(MyColonies, myPars);
