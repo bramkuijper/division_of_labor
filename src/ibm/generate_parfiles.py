@@ -37,7 +37,7 @@ class RunGenerator:
     # make destination directory clearer
         
     # some path necessary to compile stuff 
-    ld_path = "/cm/shared/apps/gsl/2.3/lib:/cm/local/apps/gcc/7.2.0/lib"
+    ld_path = "/cm/shared/apps/gsl/2.3/lib:/cm/local/apps/gcc/7.2.0/lib:/cm/shared/easybuild/software/GCCcore/6.4.0/lib64"
 
     param_file_name = "params.txt"
 
