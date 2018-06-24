@@ -43,11 +43,20 @@ if find_executable('latex'):
 
 # basename of the executable that makes histgrams out of the allele frequency
 # data. Such histograms are necessary for plotting things
-histo_exe_basename = "xreadhisto"
+histo_maker_exe_basename = "xreadhisto"
 
-# the basename of the resulting histogram file
+# the basename of the histogram file for the thresholds
+# (we are going to generate this histogram file and then 
+# plot it later)
 histogram_basename = "histograms.csv"
 number_columns_histo = 6
+
+# the basename of the resulting histogram 
+# file for the specialization 
+# (we are going to generate this histogram file and then 
+# plot it later)
+histogram_spec_basename = "histograms_specialization.csv"
+number_columns_spec_histo = 7
 
 # filename of the work allocation file
 work_file_basename = "data_work_alloc*.txt"
@@ -57,6 +66,10 @@ header_file_basename = "header.txt"
 # the file with the allelic distributions (we need to make a histogram
 # of this) 
 allele_file_basename = "threshold_distribution*.txt"
+
+# the file with the specialization distributions (we are going to make
+# a histogram of this)
+specialization_file_basename = "f_dist_1.txt"
 
 #########################################
 
@@ -91,6 +104,7 @@ current_path = Path(vars(args)["pathname"][0]).resolve()
 # whether we need to produe the histograms showing branching in the 
 # different trait values
 use_hist = vars(args)["use_histogram"]
+
 
 # get the work alloc data
 def get_work_alloc_data():
@@ -140,6 +154,67 @@ def get_work_alloc_data():
 
     return(work_alloc_data)
 
+def get_specialization_data():
+
+    # perform a system call to get the directory where
+    # the current script file resides.
+    # in this directory is also the programme that makes histograms
+    # https://stackoverflow.com/questions/3718657/how-to-properly-determine-current-script-directory 
+    script_dir = PurePath(Path(__file__).resolve())
+
+    # generate file name of the histogram generator executable
+    histo_maker_exe = Path(script_dir.parent / histo_maker_exe_basename)
+
+    # see whether the exe is indeed there
+    assert(histo_maker_exe.exists())
+
+    # generate the resulting histogram file name
+    result_histo_spec_name = current_path / histogram_spec_basename
+
+    # search for any file that matches the name in the directory
+    spec_dist_file_list = list(
+            current_path.glob(specialization_file_basename)
+            )
+
+    assert(len(spec_dist_file_list) == 1)
+
+    # call the histogram creation executable and let it work on the file
+    subprocess.call([str(histo_maker_exe), 
+        str(spec_dist_file_list[0]), 
+        str(number_columns_spec_histo)],
+        str(result_histo_spec_name)
+        )
+
+    # see whether the histograms.csv file is produced
+    assert(result_histo_spec_name.exists())
+
+    # get data on branching 
+    # this is a histogram with all sorts of values
+    branch_data = pd.read_csv(
+            filepath_or_buffer=result_histo_spec_name, 
+            sep=";", 
+            index_col=False
+            )
+
+    colnames = branch_data.columns.values
+
+    if "count" not in colnames:
+        print(branch_data.describe())
+        assert("count" in colnames)
+
+    print("read branch data")
+
+    # now 4th root transform the data, so that also see rare frequencies
+    def the_pow(x):
+        return(x**(0.25))
+
+    # power transform the count data
+    branch_data["count"] = branch_data[
+            "count"].apply(the_pow)
+
+    return(branch_data)
+
+
 # get the individual threshold data 
 # as a histogram
 def get_threshold_data():
@@ -151,15 +226,13 @@ def get_threshold_data():
     script_dir = PurePath(Path(__file__).resolve())
 
     # generate file name of the histogram generator executable
-    histo_exe = Path(script_dir.parent / histo_exe_basename)
+    histo_maker_exe = Path(script_dir.parent / histo_maker_exe_basename)
 
     # see whether the exe is indeed there
-    assert(histo_exe.exists())
+    assert(histo_maker_exe.exists())
 
     # generate the resulting histogram file name
-    result_histo_name = current_path / histogram_basename
-
-    print(current_path)
+    result_histo_spec_name = current_path / histogram_basename
 
     # search for any matching allelic value file
     allele_dist_file_list = list(current_path.glob(allele_file_basename))
@@ -167,9 +240,11 @@ def get_threshold_data():
     assert(len(allele_dist_file_list) == 1)
 
     # call the histogram creation executable and let it work on the file
-    subprocess.call([str(histo_exe), 
+    subprocess.call([str(histo_maker_exe), 
         str(allele_dist_file_list[0]), 
-        str(number_columns_histo)])
+        str(number_columns_histo)],
+        str(current_path / histogram_spec_basename)
+        )
 
     # see whether the histograms.csv file is produced
     assert(result_histo_name.exists())
@@ -234,6 +309,11 @@ widths = [ 1, 0.05 ]
 
 numrows = 5
 
+if use_hist:
+    numrows = 6
+
+rowctr = 0;
+
 heights = [ 1 for x in range(0,numrows) ]
 
 # make the grid
@@ -247,6 +327,7 @@ if use_hist:
 
     # get the threshold data
     threshold_data = get_threshold_data()
+    spec_data = get_specialization_data()
 
     # generate a pivot table for the female threshold data
     (x_threshold1, y_threshold1, threshold1_count) = generate_pivot(
@@ -256,8 +337,6 @@ if use_hist:
             z="count"
             )
 
-    print("pivot 1")
-
     # generate a pivot table for the female threshold data
     (x_threshold2, y_threshold2, threshold2_count) = generate_pivot(
             the_data = threshold_data[threshold_data["traitname"]=="trait1"], 
@@ -266,8 +345,24 @@ if use_hist:
             z="count"
             )
 
+    # generate a pivot table for the female threshold data
+    (x_spec, y_spec, spec_count) = generate_pivot(
+            the_data = spec_data[spec_data["traitname"]=="trait0"], 
+            x="generation",
+            y="bin_start",
+            z="count"
+            )
 
-    ax = plt.subplot(gs[0,0])
+    # generate a pivot table for the female threshold data
+    (x_switch1, y_switch1, switch1_count) = generate_pivot(
+            the_data = spec_data[spec_data["traitname"]=="trait2"], 
+            x="generation",
+            y="bin_start",
+            z="count"
+            )
+
+    ax = plt.subplot(gs[rowctr,0])
+    rowctr += 1
 
     # the plot for learning
     ax.imshow(threshold1_count,
@@ -282,7 +377,8 @@ if use_hist:
     ax.set_ylabel(r"Threshold task 1")
 
     # start next entry of the graph
-    ax = plt.subplot(gs[1,0])
+    ax = plt.subplot(gs[rowctr,0])
+    rowctr += 1
 
     # the plot for learning
     ax.imshow(threshold2_count,
@@ -296,10 +392,40 @@ if use_hist:
 
     ax.set_ylabel(r"Threshold task 2")
 
+    ax = plt.subplot(gs[rowctr,0])
+    rowctr += 1
+
+    # the plot for specialization
+    ax.imshow(spec_count,
+        cmap="jet",
+        extent=[x_spec.min(), 
+            x_spec.max(), 
+            y_spec.min(), 
+            y_spec.max()],
+        origin="lower",
+        aspect="auto")
+
+    ax.set_ylabel(r"Specialization")
+
+    ax = plt.subplot(gs[rowctr,0])
+    rowctr += 1
+
+    # the plot for specialization
+    ax.imshow(switches_count,
+        cmap="jet",
+        extent=[x_switches.min(), 
+            x_switches.max(), 
+            y_switches.min(), 
+            y_switches.max()],
+        origin="lower",
+        aspect="auto")
+
+    ax.set_ylabel(r"Switches")
 
 # start next entry of the graph
 # the number of acts * their efficiency
-ax = plt.subplot(gs[2,0])
+ax = plt.subplot(gs[rowctr,0])
+rowctr += 1
 
 # get the work allocation data
 work_alloc_data = get_work_alloc_data()
@@ -317,7 +443,8 @@ print(work_alloc_data.head())
 print(work_alloc_data_agg.head())
 
 # plot work allocation
-ax = plt.subplot(gs[2,0])
+ax = plt.subplot(gs[rowctr,0])
+rowctr += 1
 
 
 # auxiliary function to get confidence envelope
@@ -384,7 +511,6 @@ ax.tick_params(
 (min_sd_idle, max_sd_idle) = confidence_interval("Idle")
 
 # start next entry of the graph
-ax = plt.subplot(gs[3,0])
 
 ax.plot(
         work_alloc_data_agg.loc[:, idx["Idle",["mean"]]],
@@ -409,7 +535,8 @@ ax.tick_params(
         labelbottom=False)
 
 # start next entry of the graph
-ax = plt.subplot(gs[4,0])
+ax = plt.subplot(gs[rowctr,0])
+rowctr += 1
 
 (min_sd_fitness, max_sd_fitness) = confidence_interval("Fitness")
 
