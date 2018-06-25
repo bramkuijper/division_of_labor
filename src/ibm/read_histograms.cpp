@@ -330,13 +330,16 @@ void fillHistograms(
                 
                 generation = atoi(item.c_str());
             }
-            else if (itemnum > 0)
+            else if (itemnum > 0 && itemnum < number_columns + 1)
             {
+                cout << "\"" << atof(item.c_str()) << "\"" << endl;
                 // increment the corresponding histogram
                 gsl_histogram_increment(
                         histograms[itemnum - 1], 
                         atof(item.c_str())
                         );
+
+                cout << "done" << endl;
             }
             ++itemnum;
         }
