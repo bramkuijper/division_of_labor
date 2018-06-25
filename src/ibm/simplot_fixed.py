@@ -7,7 +7,7 @@ import itertools
 import subprocess 
 import argparse
 import numpy as np
-import sys
+import sys, re
 import matplotlib
 matplotlib.use("Agg")
 
@@ -181,12 +181,14 @@ def get_specialization_data():
     # call the histogram creation executable and let it work on the file
     subprocess.call([str(histo_maker_exe), 
         str(spec_dist_file_list[0]), 
-        str(number_columns_spec_histo)],
-        str(result_histo_spec_name)
+        str(number_columns_spec_histo),
+        str(result_histo_spec_name)]
         )
 
     # see whether the histograms.csv file is produced
     assert(result_histo_spec_name.exists())
+
+    print(str(result_histo_spec_name))
 
     # get data on branching 
     # this is a histogram with all sorts of values
@@ -232,7 +234,7 @@ def get_threshold_data():
     assert(histo_maker_exe.exists())
 
     # generate the resulting histogram file name
-    result_histo_spec_name = current_path / histogram_basename
+    result_histo_name = current_path / histogram_basename
 
     # search for any matching allelic value file
     allele_dist_file_list = list(current_path.glob(allele_file_basename))
@@ -242,8 +244,8 @@ def get_threshold_data():
     # call the histogram creation executable and let it work on the file
     subprocess.call([str(histo_maker_exe), 
         str(allele_dist_file_list[0]), 
-        str(number_columns_histo)],
-        str(current_path / histogram_spec_basename)
+        str(number_columns_histo),
+        str(result_histo_name)]
         )
 
     # see whether the histograms.csv file is produced
@@ -438,9 +440,6 @@ work_alloc_data_agg = work_alloc_data.groupby("Gen").agg(['min','max','mean','st
 # see https://stackoverflow.com/questions/41809118/get-columns-from-multiindex-dataframe-with-named-labels 
 work_alloc_data_agg = work_alloc_data_agg.sort_index(axis=1)
 idx = pd.IndexSlice
-print(len(list(work_alloc_data_agg.index.get_level_values("Gen"))))
-print(work_alloc_data.head())
-print(work_alloc_data_agg.head())
 
 # plot work allocation
 ax = plt.subplot(gs[rowctr,0])
@@ -457,16 +456,23 @@ def confidence_interval(variable_name):
     return(std_min,std_max)
 
 
+# establish proper column name
+workalloc_colnames = workalloc_data.columns.values
+# now get the work alloc column names
+workalloc1_col = [ x for x in k if re.match("workalloc1", k.lower()) is not None ][0]
+workalloc2_col = [ x for x in k if re.match("workalloc2", k.lower()) is not None ][0]
 
-(min_sd1, max_sd1) = confidence_interval("Workalloc1")
-(min_sd2, max_sd2) = confidence_interval("Workalloc2")
+
+
+(min_sd1, max_sd1) = confidence_interval(workalloc1_col)
+(min_sd2, max_sd2) = confidence_interval(workalloc2_col)
 
 # calculate lower bound of confidence envelope by subtracting standard
 # deviation from the mean
 
 
 ax.plot(
-        work_alloc_data_agg.loc[:, idx["Workalloc1",["mean"]]],
+        work_alloc_data_agg.loc[:, idx[workalloc1_col,["mean"]]],
         color="blue",
         label="Work alloc task 1")
 
@@ -482,7 +488,7 @@ ax.plot(
 
 
 ax.plot(
-        work_alloc_data_agg.loc[:, idx["Workalloc2",["mean"]]],
+        work_alloc_data_agg.loc[:, idx[workalloc2_col,["mean"]]],
         color="red",
         label="Work alloc task 2")
 
