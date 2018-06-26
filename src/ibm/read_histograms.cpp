@@ -330,13 +330,16 @@ void fillHistograms(
                 
                 generation = atoi(item.c_str());
             }
-            else if (itemnum > 0)
+            else if (itemnum > 0 && itemnum < number_columns + 1)
             {
+                cout << "\"" << atof(item.c_str()) << "\"" << endl;
                 // increment the corresponding histogram
                 gsl_histogram_increment(
                         histograms[itemnum - 1], 
                         atof(item.c_str())
                         );
+
+                cout << "done" << endl;
             }
             ++itemnum;
         }
@@ -363,12 +366,14 @@ int main(int argc, char **argv)
     // from the command line
     size_t number_columns = atoi(argv[2]);
 
+    string output_file = argv[3];
+
     // open the file
     // and also stores the basename of the file
     initFile(argc, argv, file, base_path);
     
     // add the name of the output file
-    base_path += "histograms.csv";
+    base_path = output_file;
 
     // minima and maxima of each column
     double max[number_columns];

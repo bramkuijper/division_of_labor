@@ -121,11 +121,10 @@ struct Colony
     double inactive; // proportion workers that were idle each time step
     vector <double>last_half_acts; //number of acts performed in the last half of simulation
 
-    // product of number of acts for each task, 
-    // every time step (of half of simulation)
+    // variable not used
     double work_fitness; 
 
-    // TODO
+    // fitness: see eq. (3) in Duarte et al 2012 Behav Ecol Sociobiol
     double fitness;
 
     double diff_fit;// fitness difference to minimal fitness
@@ -189,16 +188,15 @@ istream & Params::InitParams(istream & in)
         meanT.push_back(tmp);
     }
 
-    // read in the deltas
-    // this will change with stochsine TODO 
+    // read in the baseline delta
     for (int i = 0; i < tasks; ++i) 
     {    
         in >> tmp ; 
         deltabaseline.push_back(tmp);
     }
     
-    // read in the deltas
-    // this will change with stochsine TODO 
+    // read in the deltas (this will be a 
+    // function of stochsine)
     for (int i = 0; i < tasks; ++i) 
     {    
         in >> tmp ; 
@@ -363,9 +361,7 @@ void InitFounders(Population &Pop, Params &Par)
 
         for (int task = 0; task < Par.tasks; ++task)
         {
-            // TODO
-            // why is this pop.size/2??
-            if (i < Pop.size()/2)
+            if (i < Pop.size())
             {
                 Pop[i].male.threshold[task] = Par.meanT[task];
                 Pop[i].queen.threshold[task] = Par.meanT[task];
@@ -1565,7 +1561,11 @@ int main(int argc, char* argv[])
            dataants;
 
     // name the files
-	NameDataFiles(datafile1, threshold_dist_file_name, specialization_dist_file_name, datafile4, dataants);
+	NameDataFiles(datafile1, 
+            threshold_dist_file_name, 
+            specialization_dist_file_name, 
+            datafile4, 
+            dataants);
 
 	static ofstream out; 
 	static ofstream threshold_dist_output_file; // distribution of thresholds across the population
