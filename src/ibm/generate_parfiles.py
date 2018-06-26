@@ -126,6 +126,26 @@ class RunGenerator:
 
                 core_number += 1
 
+    # see whether this is running locally somewhere
+    # or whether we need to add modules
+    # https://stackoverflow.com/questions/377017/test-if-executable-exists-in-python
+    def which(self, program):
+        import os
+        def is_exe(fpath):
+            return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
+
+        fpath, fname = os.path.split(program)
+        if fpath:
+            if is_exe(program):
+                return program
+        else:
+            for path in os.environ["PATH"].split(os.pathsep):
+                exe_file = os.path.join(path, program)
+                if is_exe(exe_file):
+                    return exe_file
+
+        return None
+       
     # create the jobfile which can be submitted using qsub to run the thing.
     # batch_dir: the parent batch directory (see generate_batch())
     # run_folder: a folder within the batch dir containing a single run
@@ -142,16 +162,22 @@ class RunGenerator:
                 str(run_folder_number)
 
 
+        use_module_command = self.which("module") is not None
+
+
         # create the start of the jobfile
         job_file_content = "#!/bin/sh\n" \
                 + "#$ -N " + job_name + "\n" \
                 + "#$ -S /bin/bash\n" \
-                + "#$ -M " + self.email + "\n" \
-                + ". /etc/profile.d/modules.sh\n" \
+                + "#$ -M " + self.email + "\n"
+
+        if use_module_command:
+            job_file_content += ". /etc/profile.d/modules.sh\n" \
                 + "module load shared gsl\n" \
                 + "export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:" \
-                + self.ld_path + "\n" \
-                + "cd " + str(run_folder) + "\n" \
+                + self.ld_path + "\n" 
+
+        job_file_content += "cd " + str(run_folder) + "\n" \
                 + "./" + self.exe.name
 
         # generate a filename for the qsub file
@@ -237,7 +263,7 @@ pardict = OrderedDict()
 
 maxtime = 100
 
-pardict["N"]=[ 500] # number of workers / colony
+pardict["N"]=[ 100] # number of workers / colony
 pardict["Col"]=[ 1000] # number of colonies
 pardict["maxtime"]=[maxtime] # time steps work is performed before reproduction
 pardict["meanT1"]=[ 10.0 ] # mean threshold for each task
@@ -252,10 +278,10 @@ pardict["beta1"]=[ 0.0 ] # maximum work efficiency task 1
 pardict["beta2"]=[ 0.0 ] # maximum work efficiency task 1
 pardict["exp_task_1"]=[0.5] # exponent task 1 
 pardict["exp_task_2"]=[0.5] # exponent task 2 
-pardict["p"]=[ 0.2] # quitting probability
+pardict["p"]=[ 1.0 ] # quitting probability
 pardict["mutp"]=[0.1] # mutation probability
 pardict["mutstd"]=[0.1] # mutation probability
-pardict["recomb"]=[0,0.5] # mutation probability
+pardict["recomb"]=[0.5] # mutation probability
 pardict["maxgen"]=[10000] # number of generations 
 
 # number of timesteps a worker has to wait 
