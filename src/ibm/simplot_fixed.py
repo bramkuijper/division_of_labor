@@ -312,7 +312,7 @@ widths = [ 1, 0.05 ]
 numrows = 5
 
 if use_hist:
-    numrows = 6
+    numrows = 7
 
 rowctr = 0;
 
@@ -356,7 +356,7 @@ if use_hist:
             )
 
     # generate a pivot table for the female threshold data
-    (x_switch1, y_switch1, switch1_count) = generate_pivot(
+    (x_switches, y_switches, switches_count) = generate_pivot(
             the_data = spec_data[spec_data["traitname"]=="trait2"], 
             x="generation",
             y="bin_start",
@@ -412,7 +412,7 @@ if use_hist:
     ax = plt.subplot(gs[rowctr,0])
     rowctr += 1
 
-    # the plot for specialization
+    # the plot for switches
     ax.imshow(switches_count,
         cmap="jet",
         extent=[x_switches.min(), 
@@ -457,10 +457,10 @@ def confidence_interval(variable_name):
 
 
 # establish proper column name
-workalloc_colnames = workalloc_data.columns.values
+workalloc_colnames = work_alloc_data.columns.values
 # now get the work alloc column names
-workalloc1_col = [ x for x in k if re.match("workalloc1", k.lower()) is not None ][0]
-workalloc2_col = [ x for x in k if re.match("workalloc2", k.lower()) is not None ][0]
+workalloc1_col = [ x for x in workalloc_colnames if re.match("workalloc1", x.lower()) is not None ][0]
+workalloc2_col = [ x for x in workalloc_colnames if re.match("workalloc2", x.lower()) is not None ][0]
 
 
 

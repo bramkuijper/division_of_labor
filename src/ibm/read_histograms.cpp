@@ -164,8 +164,6 @@ void initHistograms(gsl_histogram **histograms,
     {
         histograms[i] = gsl_histogram_alloc(500);
         cout << "max " << i << ": " << max[i] << endl;
-        cout << "min" << i << ": " << min[i] << endl;
-
         if (min[i] == max[i])
         {
             max[i] += 1;
@@ -239,8 +237,6 @@ void writeHistograms(
 
         ++itemnum;
     }
-
-    cout << histostrings[2].str() << endl;
 
     // now print the histogram
     for (size_t i = 0; i < number_columns; ++i)
@@ -332,14 +328,12 @@ void fillHistograms(
             }
             else if (itemnum > 0 && itemnum < number_columns + 1)
             {
-                cout << "\"" << atof(item.c_str()) << "\"" << endl;
                 // increment the corresponding histogram
                 gsl_histogram_increment(
                         histograms[itemnum - 1], 
                         atof(item.c_str())
                         );
 
-                cout << "done" << endl;
             }
             ++itemnum;
         }
