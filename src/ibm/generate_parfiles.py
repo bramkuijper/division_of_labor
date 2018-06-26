@@ -263,7 +263,7 @@ pardict = OrderedDict()
 
 maxtime = 100
 
-pardict["N"]=[ 500] # number of workers / colony
+pardict["N"]=[ 100] # number of workers / colony
 pardict["Col"]=[ 1000] # number of colonies
 pardict["maxtime"]=[maxtime] # time steps work is performed before reproduction
 pardict["meanT1"]=[ 10.0 ] # mean threshold for each task
@@ -278,10 +278,10 @@ pardict["beta1"]=[ 0.0 ] # maximum work efficiency task 1
 pardict["beta2"]=[ 0.0 ] # maximum work efficiency task 1
 pardict["exp_task_1"]=[0.5] # exponent task 1 
 pardict["exp_task_2"]=[0.5] # exponent task 2 
-pardict["p"]=[ 0.2] # quitting probability
+pardict["p"]=[ 1.0 ] # quitting probability
 pardict["mutp"]=[0.1] # mutation probability
 pardict["mutstd"]=[0.1] # mutation probability
-pardict["recomb"]=[0,0.5] # mutation probability
+pardict["recomb"]=[0.5] # mutation probability
 pardict["maxgen"]=[10000] # number of generations 
 
 # number of timesteps a worker has to wait 

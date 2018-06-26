@@ -73,7 +73,6 @@ struct Params
     // in eq (3) of Duarte et al 2012 Behav Ecol Sociobiol
     vector<double> fitness_weights; 
 
-
     // stochsine
     double A; //Deterministic factor
 	double B; //Stochastic factor
@@ -741,8 +740,18 @@ void EvalTaskSwitch (Params & Par, Colony & anyCol, Ant & anyAnt, int myjob)
 // Involves the stimulus per ant and threshold, and defines when an ant might switch tasks
 void TaskChoice(Params & Par, Colony & anyCol, Ant & anyAnt)
 { 
-    // check if ant previously did not want to do neither task 
-    if (!anyAnt.want_task[0] && !anyAnt.want_task[1])
+    bool wants_any_task = false;
+
+    // go through the tasks and see whether they want to be done
+    for (int task = 0; task < Par.tasks; ++task)
+    {
+        if (anyAnt.want_task[task])
+        {
+            wants_any_task = true;
+        }
+    }
+
+    if (!wants_any_task)
     {
         // assess whether the ant still does not want to do
         // any tasks
@@ -904,14 +913,15 @@ void UpdateStim(Population & Pop, Params & Par)
             Pop[colony_i].newstim[task] -= (Pop[colony_i].workfor[task]/Par.N); 
 #endif
 
+            // update the stimulus
+            Pop[colony_i].stim[task] = Pop[colony_i].newstim[task];
+            
             // stimulus cannot be negative
             if (Pop[colony_i].stim[task] < 0)
             {
                 Pop[colony_i].stim[task] = 0;
             }
 
-            // update the stimulus
-            Pop[colony_i].stim[task] = Pop[colony_i].newstim[task];
         } // end for task
     } // end for colony_i
 } // end UpdateStim()
