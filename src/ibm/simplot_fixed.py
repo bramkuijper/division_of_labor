@@ -309,10 +309,10 @@ fig = plt.figure(figsize=(10,18))
 # see: 
 widths = [ 1, 0.05 ]
 
-numrows = 5
+numrows = 6
 
 if use_hist:
-    numrows = 7
+    numrows += 3
 
 rowctr = 0;
 
@@ -358,6 +358,13 @@ if use_hist:
     # generate a pivot table for the female threshold data
     (x_switches, y_switches, switches_count) = generate_pivot(
             the_data = spec_data[spec_data["traitname"]=="trait2"], 
+            x="generation",
+            y="bin_start",
+            z="count"
+            )
+    # generate a pivot table for the female threshold data
+    (x_workperiods, y_workperiods, workperiods_count) = generate_pivot(
+            the_data = spec_data[spec_data["traitname"]=="trait3"], 
             x="generation",
             y="bin_start",
             z="count"
@@ -423,6 +430,21 @@ if use_hist:
         aspect="auto")
 
     ax.set_ylabel(r"Switches")
+    
+    ax = plt.subplot(gs[rowctr,0])
+    rowctr += 1
+
+    # the plot for workperiods
+    ax.imshow(workperiods_count,
+        cmap="jet",
+        extent=[x_workperiods.min(), 
+            x_workperiods.max(), 
+            y_workperiods.min(), 
+            y_workperiods.max()],
+        origin="lower",
+        aspect="auto")
+
+    ax.set_ylabel(r"Workperiods")
 
 # start next entry of the graph
 # the number of acts * their efficiency
@@ -440,11 +462,6 @@ work_alloc_data_agg = work_alloc_data.groupby("Gen").agg(['min','max','mean','st
 # see https://stackoverflow.com/questions/41809118/get-columns-from-multiindex-dataframe-with-named-labels 
 work_alloc_data_agg = work_alloc_data_agg.sort_index(axis=1)
 idx = pd.IndexSlice
-
-# plot work allocation
-ax = plt.subplot(gs[rowctr,0])
-rowctr += 1
-
 
 # auxiliary function to get confidence envelope
 def confidence_interval(variable_name):
@@ -513,6 +530,9 @@ ax.tick_params(
         which="both",
         labelbottom=False)
 
+# plot work allocation
+ax = plt.subplot(gs[rowctr,0])
+rowctr += 1
 
 (min_sd_idle, max_sd_idle) = confidence_interval("Idle")
 
@@ -534,6 +554,49 @@ ax.plot(
         label="_nolabel")
 
 ax.set_ylabel(r"Idle")
+
+
+# plot work allocation
+ax = plt.subplot(gs[rowctr,0])
+rowctr += 1
+
+(min_sd_acts1, max_sd_acts1) = confidence_interval("NumActs1")
+(min_sd_acts2, max_sd_acts2) = confidence_interval("NumActs2")
+
+# start next entry of the graph
+
+ax.plot(
+        work_alloc_data_agg.loc[:, idx["NumActs1",["mean"]]],
+        label=r"$N_{\mathrm{acts},1}$",
+        color="blue")
+
+ax.plot(
+        min_sd_acts1,
+        color="lightblue",
+        label="_nolabel")
+
+ax.plot(
+        max_sd_acts1,
+        color="lightblue",
+        label="_nolabel")
+
+ax.plot(
+        work_alloc_data_agg.loc[:, idx["NumActs2",["mean"]]],
+        label=r"$N_{\mathrm{acts},2}$",
+        color="red")
+
+ax.plot(
+        min_sd_acts2,
+        color="pink",
+        label="_nolabel")
+
+ax.plot(
+        max_sd_acts2,
+        color="pink",
+        label="_nolabel")
+
+ax.legend()
+ax.set_ylabel(r"Numacts")
 
 ax.tick_params(
         axis="x",

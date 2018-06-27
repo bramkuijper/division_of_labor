@@ -584,6 +584,7 @@ void UpdateStimPerAnt(Params & Par, Colony & anyCol, Ant & anyAnt, int task)
 // innate quitting probability, unrelated to any other varaiable
 void QuitTask(Colony & anyCol, Ant & anyAnt, int job, Params & Par)
 {
+    assert(anyAnt.curr_act < Par.tasks);
     // ant quits
     if (gsl_rng_uniform(rng_global) < Par.p)
     {
@@ -631,6 +632,7 @@ double RPfunction (double t, double s)
 // in (and in absence of simultaneous updating)
 void DoTask(Params Par, Colony & anyCol, Ant & anyAnt,int job)
 {
+    assert(job < Par.tasks);
     // updating her current act for the task she's doing
     anyAnt.curr_act = job; 
 
@@ -720,7 +722,7 @@ void EvalTaskSwitch (Params & Par, Colony & anyCol, Ant & anyAnt, int myjob)
     {
         // find out whether ant cannot switch 
         // to a different ask but has to wait
-        if (gsl_rng_uniform(rng_global) <= Par.p_wait
+        if (Par.p_wait >= gsl_rng_uniform(rng_global)
                 && anyAnt.count_time < Par.timecost)    
         {
             anyAnt.curr_act = Par.tasks; // stays idle for as long as count_time<timecost    
@@ -756,36 +758,50 @@ void TaskChoice(Params & Par, Colony & anyCol, Ant & anyAnt)
         // assess whether the ant still does not want to do
         // any tasks
         WantTask(Par, anyCol, anyAnt);
-    }
 
-    // go through the tasks and see whether they want to be done
-    for (int task = 0; task < Par.tasks; ++task)
-    {
-        // ok ant wants to do a task
-        // (it can only want to do one task)
-        if (anyAnt.want_task[task])
+        // go through the tasks and see whether they want to be done
+        for (int task = 0; task < Par.tasks; ++task)
         {
-            // ant currently doing nothing
-            if (anyAnt.last_act >= Par.tasks) 
+            // ok ant wants to do a task
+            // (it can only want to do one task)
+            if (anyAnt.want_task[task])
             {
-                // perform the task
-                DoTask(Par, anyCol, anyAnt, task);
-            }
-            else // ant currently engaged in a task
+                // ant currently doing nothing
+                if (anyAnt.last_act >= Par.tasks) 
+                {
+                    // perform the task
+                    DoTask(Par, anyCol, anyAnt, task);
+                }
+                else // ant currently engaged in a task
+                {
+                    EvalTaskSwitch(Par, anyCol, anyAnt, task); 
+                }
+            }    
+            else 
             {
-                EvalTaskSwitch(Par, anyCol, anyAnt, task); 
+                // if she doesn't want the task, just remain idle
+                anyAnt.curr_act = Par.tasks; 
             }
-        }    
-        else 
-        {
-            // if she doesn't want the task, just remain idle
-            anyAnt.curr_act = Par.tasks; 
-        }
-    } // end for task_i
+        } // end for task_i
+    }
+    else 
+	{   
+	//cout << "Ant has a preference "  ;
+        for (int job=0; job<Par.tasks; job++)
+		{
+			if (anyAnt.want_task[job] ) // if she wants a specific task 
+                	{
+			        assert(anyAnt.want_task[1-job]==false);    
+                	EvalTaskSwitch(Par, anyCol, anyAnt, job); 
+			        break;
+                	}
+		}
+         }       
 } // end of TaskChoice()
 
 
 // update ants and number of switches
+// runs once per ecological timestep
 void UpdateAnts(Population & Pop, Params & Par)
 {
     int current_act;
@@ -841,16 +857,15 @@ void UpdateAnts(Population & Pop, Params & Par)
                 ++Pop[colony_i].MyAnts[ant_i].countacts[current_act];
            
                 // update number of switches
-                if (Pop[colony_i].MyAnts[ant_i].last_act < Par.tasks 
-                        && Pop[colony_i].MyAnts[ant_i].last_act != 
+                if (Pop[colony_i].MyAnts[ant_i].last_act != 
                         Pop[colony_i].MyAnts[ant_i].curr_act)
                 {
-                    ++Pop[colony_i].MyAnts[ant_i].switches;
+                    Pop[colony_i].MyAnts[ant_i].switches++;
                 }
             }
             else
             {
-                ++Pop[colony_i].inactive;
+                Pop[colony_i].inactive++;
             }
         }// ant for ant_i 
 
@@ -924,6 +939,7 @@ void UpdateStim(Population & Pop, Params & Par)
 
         } // end for task
     } // end for colony_i
+
 } // end UpdateStim()
 //------------------------------------------------------------------------------
 
@@ -1315,6 +1331,9 @@ void Write_Headers(
         ofstream &data_1gen,
         Params &Par)
 {
+    // header file is the standard header file
+    // for data_work_alloc_x.txt. See the function
+    // Write_Col_Data()
     header_file << "Gen" << "\t" 
     << "Col"  << "\t";
 
@@ -1625,7 +1644,10 @@ int main(int argc, char* argv[])
             // update all the fitness data etc
             Update_Col_Data(k, MyColonies, myPars);
 
-            ++equil_steps;
+            if (k >= myPars.tau)
+            {
+                ++equil_steps;
+            }
            
             // last timestep before reproduction
             if (k == myPars.maxtime-1)
@@ -1660,6 +1682,7 @@ int main(int argc, char* argv[])
                 } // end if generations are right
             } // end if k=maxtime
 
+            // last generation, run output stuff
             if (g == simstart_generation + myPars.maxgen - 1) 
             {
                 for (unsigned int col = 0; col < MyColonies.size(); ++col)
