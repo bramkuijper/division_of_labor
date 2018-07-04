@@ -995,14 +995,14 @@ void Calc_F(Population & Pop, Params & Par) // calculate specialization
                 //  which is the number of switches divided by the total number of
                 //  possible switches, which is the number of workperiods minus 1
                 //  (as one cannot switch anymore during the final workperiod)
-                C = double(Pop[colony_i].MyAnts[ant_i].switches) / 
+                C = (double) Pop[colony_i].MyAnts[ant_i].switches / 
                     (Pop[colony_i].MyAnts[ant_i].workperiods - 1.0);
      
                 // F is between -1 and 1
-                Pop[colony_i].MyAnts[ant_i].F = 1 - 2*C;
+                Pop[colony_i].MyAnts[ant_i].F = 1.0 - 2.0 *C;
                 // F_franjo is between 0 and 1
                 //
-                F_franjo = 1-C;
+                F_franjo = 1.0 - C;
      
                 // sum all values of F to calculate averages
                 Pop[colony_i].mean_F += Pop[colony_i].MyAnts[ant_i].F;
@@ -1019,28 +1019,49 @@ void Calc_F(Population & Pop, Params & Par) // calculate specialization
             } // end if workperiods > 0
         } // end for ant_i
 
-        // calculate average switch rate by dividing by the number of active ants
-        Pop[colony_i].mean_switches /= n_ants_active;
-        
+        // if there have been active ants, calculate switch rate
+        // and specialization values
+        if (n_ants_active > 0)
+        {
+            // calculate average switch rate by 
+            // dividing by the number of active ants
+            Pop[colony_i].mean_switches /= n_ants_active;
+            
+            // calculate variance in switch rate
+            Pop[colony_i].var_switches = sumsquares_switches / n_ants_active - 
+                Pop[colony_i].mean_switches * Pop[colony_i].mean_switches;
+
+            Pop[colony_i].mean_F /= n_ants_active;
+
+            Pop[colony_i].mean_F_franjo /= n_ants_active;
+
+            Pop[colony_i].var_F = sumsquares_F / n_ants_active - 
+                Pop[colony_i].mean_F * Pop[colony_i].mean_F;
+
+            Pop[colony_i].var_F_franjo = sumsquares_F_franjo / n_ants_active - 
+                Pop[colony_i].mean_F_franjo * Pop[colony_i].mean_F_franjo;
+
+        }
+        else // no active ants whatsoever, set switch rate stats to 0
+        {
+            Pop[colony_i].mean_switches = 0.0;
+            Pop[colony_i].var_switches = 0.0;
+            Pop[colony_i].mean_F = 0.0;
+            Pop[colony_i].mean_F_franjo = 0.0;
+            Pop[colony_i].var_F = 0.0;
+            Pop[colony_i].var_F_franjo = 0.0;
+        }
+
+
         // calculate mean workperiods by dividing by the total number of ants
         Pop[colony_i].mean_workperiods /= Pop[colony_i].MyAnts.size();
 
-        // calculate variances
-        Pop[colony_i].var_switches = sumsquares_switches / n_ants_active - 
-            Pop[colony_i].mean_switches * Pop[colony_i].mean_switches;
+        // calculate variance in workperiods
+        Pop[colony_i].var_workperiods = 
+            sumsquares_workperiods / Pop[colony_i].MyAnts.size() -
+                Pop[colony_i].mean_workperiods * Pop[colony_i].mean_workperiods;
 
-        Pop[colony_i].var_workperiods = sumsquares_workperiods / Pop[colony_i].MyAnts.size() -
-            Pop[colony_i].mean_workperiods * Pop[colony_i].mean_workperiods;
-
-        Pop[colony_i].mean_F /= n_ants_active;
-        Pop[colony_i].mean_F_franjo /= n_ants_active;
-
-        Pop[colony_i].var_F = sumsquares_F / n_ants_active - 
-            Pop[colony_i].mean_F * Pop[colony_i].mean_F;
-
-        Pop[colony_i].var_F_franjo = sumsquares_F_franjo / n_ants_active - 
-            Pop[colony_i].mean_F_franjo * Pop[colony_i].mean_F_franjo;
-
+        // calculate average switch rate by dividing by the number of active ants
     } // end for Colonies
 
 } // end of Calc_F()

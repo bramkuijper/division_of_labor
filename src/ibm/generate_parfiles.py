@@ -74,7 +74,7 @@ class RunGenerator:
 
     # generate a batch directory with all folders
     # which contain runs and executables
-    def generate_batch(self, nrep=1):
+    def generate_batch(self):
 
         # check that the dataframe has more than 0 rows
         assert(self.all_runs.shape[0] > 0)
@@ -99,32 +99,29 @@ class RunGenerator:
 
         core_number = 0
 
-        # ok, make several replicates
-        for replicate in range(0,nrep):
+        # loop through all rows and generate the folders
+        for rownum, row in self.all_runs.iterrows():
 
-            # loop through all rows and generate the folders
-            for rownum, row in self.all_runs.iterrows():
+            # create new subfolder for a single run
 
-                # create new subfolder for a single run
+            # make the name of the subfolder
+            folder_name = self.run_dir_prefix + "_" + str(core_number)
+       
+            # create it
+            current_folder = batch_dir / folder_name
+            current_folder.mkdir()
 
-                # make the name of the subfolder
-                folder_name = self.run_dir_prefix + "_" + str(core_number)
-           
-                # create it
-                current_folder = batch_dir / folder_name
-                current_folder.mkdir()
+            # write the parameter file
+            self.write_parameter_file(current_folder, core_number, row)
 
-                # write the parameter file
-                self.write_parameter_file(current_folder, core_number, row)
+            # copy the executable to the new directory
+            shutil.copy(str(self.exe), 
+                    str(current_folder / self.exe.name))
 
-                # copy the executable to the new directory
-                shutil.copy(str(self.exe), 
-                        str(current_folder / self.exe.name))
+            # now make the jobfile
+            self.create_jobfile(batch_dir, current_folder, core_number)
 
-                # now make the jobfile
-                self.create_jobfile(batch_dir, current_folder, core_number)
-
-                core_number += 1
+            core_number += 1
 
     # see whether this is running locally somewhere
     # or whether we need to add modules
@@ -263,15 +260,18 @@ pardict = OrderedDict()
 
 maxtime = 100
 
+# number of independent replicates
+nrep = 5
+
 pardict["N"]=[ 100] # number of workers / colony
-pardict["Col"]=[200,500,1000] # number of colonies
+pardict["Col"]=[1000] # number of colonies
 pardict["maxtime"]=[maxtime] # time steps work is performed before reproduction
 pardict["meanT1"]=[ 10.0 ] # mean threshold for each task
 pardict["meanT2"]=[ 10.0 ] # mean threshold for each task
 pardict["delta1_baseline"]=[ 1.0 ] # fixed increase in stimulus
 pardict["delta2_baseline"]=[ 1.0 ] # fixed increase in stimulus
-pardict["delta1"]=[ 0.0 ] # fixed increase in stimulus
-pardict["delta2"]=[ 0.0 ] # fixed increase in stimulus
+pardict["delta1"]=[ 1.0 ] # fixed increase in stimulus
+pardict["delta2"]=[ 1.0 ] # fixed increase in stimulus
 pardict["alfa1"]=[ 3.0 ] # maximum work efficiency task 1
 pardict["alfa2"]=[ 3.0 ] # maximum work efficiency task 1
 pardict["beta1"]=[ 0.0 ] # maximum work efficiency task 1
@@ -286,12 +286,12 @@ pardict["maxgen"]=[10000] # number of generations
 
 # number of timesteps a worker has to wait 
 # before engaging in another task (this is a cost of switching)
-pardict["timecost"]=[10] 
+pardict["timecost"]=[6] 
 
 # initial value of the stimulus
 pardict["initStim"]=[0] 
 pardict["p_wait"]=[1.0] 
-pardict["tau"]=[int(maxtime/2)] 
+pardict["tau"]=[10] 
 pardict["A"]=[0.0] #Deterministic factor
 pardict["B"]=[0.0] #Stochastic factor  
 pardict["genspercycle"]=[50] #Generations per environmental cycle      
@@ -304,12 +304,27 @@ pardict["randommax"]=[0] #Maximum value of positive random number
 all_combinations = expand_grid(pardict)
 
 
+
+all_combinations["replicate"] = 0
+
+replicate_base = all_combinations.copy(deep=True)
+
+for i in range(1, nrep):
+    replicate_base["replicate"] = i
+    all_combinations = all_combinations.append(replicate_base)
+
 # add a column with random numbers representing the seed
 # this can be left alone
 all_combinations["seed"] = np.random.randint(
         low = 0, 
         high = 2147483646,
         size = all_combinations.shape[0])
+
+# drop the replicate column
+all_combinations = all_combinations.drop(columns=["replicate"])
+
+# and we are done
+print(all_combinations.columns.values)
 
 # make an instance of the rungenerator class
 # change stuff here
@@ -323,4 +338,4 @@ rg = RunGenerator(
 # generate the batch with the number of replicates per batch
 # if you just want a single replicate for each parameter combination
 # nrep=1 should do it
-rg.generate_batch(nrep=1)
+rg.generate_batch()
