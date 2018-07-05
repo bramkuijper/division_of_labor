@@ -315,10 +315,12 @@ for i in range(1, nrep):
 
 # add a column with random numbers representing the seed
 # this can be left alone
-all_combinations["seed"] = np.random.randint(
-        low = 0, 
-        high = 2147483646,
-        size = all_combinations.shape[0])
+#all_combinations["seed"] = np.random.randint(
+#        low = 0, 
+#        high = 2147483646,
+#        size = all_combinations.shape[0])
+all_combinations["seed"] = 1255481589
+
 
 # drop the replicate column
 all_combinations = all_combinations.drop(columns=["replicate"])

@@ -980,7 +980,7 @@ void Calc_F(Population & Pop, Params & Par) // calculate specialization
                 Pop[colony_i].MyAnts[ant_i].workperiods;
 
             // if this ant has ever worked take statistics on switches
-            if (Pop[colony_i].MyAnts[ant_i].workperiods > 0)
+            if (Pop[colony_i].MyAnts[ant_i].workperiods > 1)
             {
                 // calculate mean switches and 
                 // workperiods for book-keeping
@@ -997,13 +997,14 @@ void Calc_F(Population & Pop, Params & Par) // calculate specialization
                 //  (as one cannot switch anymore during the final workperiod)
                 C = (double) Pop[colony_i].MyAnts[ant_i].switches / 
                     (Pop[colony_i].MyAnts[ant_i].workperiods - 1.0);
-     
+
+
                 // F is between -1 and 1
                 Pop[colony_i].MyAnts[ant_i].F = 1.0 - 2.0 *C;
                 // F_franjo is between 0 and 1
                 //
                 F_franjo = 1.0 - C;
-     
+                
                 // sum all values of F to calculate averages
                 Pop[colony_i].mean_F += Pop[colony_i].MyAnts[ant_i].F;
                 mean_F_franjo += F_franjo;
@@ -1040,7 +1041,6 @@ void Calc_F(Population & Pop, Params & Par) // calculate specialization
 
             Pop[colony_i].var_F_franjo = sumsquares_F_franjo / n_ants_active - 
                 Pop[colony_i].mean_F_franjo * Pop[colony_i].mean_F_franjo;
-
         }
         else // no active ants whatsoever, set switch rate stats to 0
         {
@@ -1051,6 +1051,22 @@ void Calc_F(Population & Pop, Params & Par) // calculate specialization
             Pop[colony_i].var_F = 0.0;
             Pop[colony_i].var_F_franjo = 0.0;
         }
+    
+        if (abs(std::isnan(Pop[colony_i].mean_F)) > 0)
+        {
+            cout << colony_i << endl;
+        }
+        else if(abs(std::isinf(Pop[colony_i].mean_switches)) == 1)
+        {
+            cout << colony_i << endl;
+        }
+        
+
+
+        assert(std::isnan(Pop[colony_i].mean_F) == 0);
+        assert(std::isnan(Pop[colony_i].mean_switches) == 0);
+        assert(abs(std::isinf(Pop[colony_i].mean_F)) < 1);
+        assert(abs(std::isinf(Pop[colony_i].mean_switches)) < 1);
 
 
         // calculate mean workperiods by dividing by the total number of ants
