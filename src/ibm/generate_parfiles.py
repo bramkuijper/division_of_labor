@@ -250,8 +250,6 @@ def expand_grid(data_dict):
 # instructions for the cluster to run one single job
 # 
 
-maxtime = 3000
-
 # make a dictionary of all the parameters
 # parameters are listed in order of appearance
 # if you want to have multiple parameter values for a single
@@ -261,7 +259,7 @@ pardict = OrderedDict()
 maxtime = 100
 
 # number of independent replicates
-nrep = 5
+nrep = 1
 
 pardict["N"]=[ 100] # number of workers / colony
 pardict["Col"]=[1000] # number of colonies
@@ -294,10 +292,8 @@ pardict["p_wait"]=[1.0]
 pardict["tau"]=[10] 
 pardict["A"]=[0.0] #Deterministic factor
 pardict["B"]=[0.0] #Stochastic factor  
-pardict["genspercycle"]=[50] #Generations per environmental cycle      
-#pardict["randommax"]=[0, 0.001, 0.01, 0.1, 1, 10] #Maximum value of positive random number
-pardict["randommax"]=[0] #Maximum value of positive random number
-
+pardict["genspercycle"]=[0.5] #Generations per environmental cycle      
+pardict["randommax"]=[10] #Maximum value of positive random number
 
 # make all parameter combinations
 # this can be left alone
