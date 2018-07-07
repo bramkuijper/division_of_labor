@@ -349,7 +349,7 @@ if use_hist:
 
     # generate a pivot table for the female threshold data
     (x_spec, y_spec, spec_count) = generate_pivot(
-            the_data = spec_data[spec_data["traitname"]=="trait2"], 
+            the_data = spec_data[spec_data["traitname"]=="trait0"], 
             x="generation",
             y="bin_start",
             z="count"
@@ -357,14 +357,14 @@ if use_hist:
 
     # generate a pivot table for the female threshold data
     (x_switches, y_switches, switches_count) = generate_pivot(
-            the_data = spec_data[spec_data["traitname"]=="trait3"], 
+            the_data = spec_data[spec_data["traitname"]=="trait2"], 
             x="generation",
             y="bin_start",
             z="count"
             )
     # generate a pivot table for the female threshold data
     (x_workperiods, y_workperiods, workperiods_count) = generate_pivot(
-            the_data = spec_data[spec_data["traitname"]=="trait4"], 
+            the_data = spec_data[spec_data["traitname"]=="trait3"], 
             x="generation",
             y="bin_start",
             z="count"
