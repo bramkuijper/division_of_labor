@@ -262,7 +262,7 @@ maxtime = 100
 nrep = 1
 
 pardict["N"]=[ 100] # number of workers / colony
-pardict["Col"]=[1000] # number of colonies
+pardict["Col"]=[100] # number of colonies
 pardict["maxtime"]=[maxtime] # time steps work is performed before reproduction
 pardict["meanT1"]=[ 10.0 ] # mean threshold for each task
 pardict["meanT2"]=[ 10.0 ] # mean threshold for each task
@@ -280,7 +280,7 @@ pardict["p"]=[ 1.0 ] # quitting probability
 pardict["mutp"]=[0.1] # mutation probability
 pardict["mutstd"]=[0.1] # mutation probability
 pardict["recomb"]=[0.5] # mutation probability
-pardict["maxgen"]=[10000] # number of generations 
+pardict["maxgen"]=[100] # number of generations 
 
 # number of timesteps a worker has to wait 
 # before engaging in another task (this is a cost of switching)
@@ -290,9 +290,10 @@ pardict["timecost"]=[6]
 pardict["initStim"]=[0] 
 pardict["p_wait"]=[1.0] 
 pardict["tau"]=[10] 
-pardict["A"]=[0.0] #Deterministic factor
-pardict["B"]=[0.0] #Stochastic factor  
-pardict["genspercycle"]=[0.5] #Generations per environmental cycle      
+pardict["A"]=[0.0, 0.5, 1] #Deterministic factor
+pardict["B"]=[0.0, 0.5, 1] #Stochastic factor  
+#0.62832, 1.25664, 1.88496, 2.51327
+pardict["genspercycle"]=[0.62832] #Generations per environmental cycle      
 pardict["randommax"]=[10] #Maximum value of positive random number
 
 # make all parameter combinations
