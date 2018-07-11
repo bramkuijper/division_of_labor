@@ -76,8 +76,8 @@ struct Params
     // stochsine
     double A; //Deterministic factor
 	double B; //Stochastic factor
-	int genspercycle; //Generations per environmental cycle
-	int randommax; //Maximum value of positive random number
+	double genspercycle; //Generations per environmental cycle
+	double randommax; //Maximum value of positive random number
 	int gensdone; //Generations completed
 	int stepsdone; //Timesteps completed in current generation
   
