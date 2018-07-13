@@ -894,8 +894,8 @@ void Stochsine(Params & Par)
             ) / Par.maxtime* Par.genspercycle))
             + (Par.B *
 
-            //Random number between 0 and randdommax
-            gsl_rng_uniform_pos(rng_global) * Par.randommax);
+            //Random number between -1 and 1
+            ((gsl_rng_uniform_pos(rng_global)*2)-1));
     }
 }
 
