@@ -266,12 +266,12 @@ pardict["Col"]=[1000] # number of colonies
 pardict["maxtime"]=[maxtime] # time steps work is performed before reproduction
 pardict["meanT1"]=[ 10.0 ] # mean threshold for each task
 pardict["meanT2"]=[ 10.0 ] # mean threshold for each task
-pardict["delta1_baseline"]=[ 1.0 ] # fixed increase in stimulus
-pardict["delta2_baseline"]=[ 1.0 ] # fixed increase in stimulus
+pardict["delta1_baseline"]=[ 2.0 ] # fixed increase in stimulus
+pardict["delta2_baseline"]=[ 2.0 ] # fixed increase in stimulus
 pardict["delta1"]=[ 1.0 ] # fixed increase in stimulus
 pardict["delta2"]=[ 1.0 ] # fixed increase in stimulus
-pardict["alfa1"]=[ 1.0 ] # maximum work efficiency task 1
-pardict["alfa2"]=[ 1.0 ] # maximum work efficiency task 1
+pardict["alfa1"]=[ 5.0 ] # maximum work efficiency task 1
+pardict["alfa2"]=[ 5.0 ] # maximum work efficiency task 1
 pardict["beta1"]=[ 0.0 ] # maximum work efficiency task 1
 pardict["beta2"]=[ 0.0 ] # maximum work efficiency task 1
 pardict["exp_task_1"]=[0.5] # exponent task 1 
@@ -284,15 +284,14 @@ pardict["maxgen"]=[10000] # number of generations
 
 # number of timesteps a worker has to wait 
 # before engaging in another task (this is a cost of switching)
-pardict["timecost"]=[10] 
-
+pardict["timecost"]=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10] 
 # initial value of the stimulus
 pardict["initStim"]=[0] 
 pardict["p_wait"]=[1.0] 
 pardict["tau"]=[10]
 #0.0, 0.25, 0.5, 0.75, 1
-pardict["A"]=[0.0, 0.25, 0.5, 0.75, 1] #Deterministic factor
-pardict["B"]=[0.0, 0.25, 0.5, 0.75, 1] #Stochastic factor  
+pardict["A"]=[0.0] #Deterministic factor
+pardict["B"]=[0.0] #Stochastic factor  
 #0, 0.62832, 1.25664, 1.88496, 2.51327, 3.14159
 pardict["genspercycle"]=[0.62832] #Generations per environmental cycle      
 pardict["randommax"]=[1] #Maximum value of positive random number
@@ -328,9 +327,8 @@ print(all_combinations)
 
 
 #Update to stochsine: A+B maximum should be 1, to avoid overstimulation, but still want to allow A+B=0
-all_combinations = all_combinations[all_combinations.A + all_combinations.B <= 1]
-
-print(all_combinations)
+#all_combinations = all_combinations[all_combinations.A + all_combinations.B <= 1]
+#print(all_combinations)
 
 
   # make an instance of the rungenerator class
