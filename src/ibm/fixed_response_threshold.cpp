@@ -1379,14 +1379,14 @@ void Write_Headers(
 
     for (int task_i = 0; task_i < Par.tasks; ++task_i)
     {
-        header_file << "NumActs" << (task_i + 1) << "\t"; 
-        data_1gen << "Stim" << (task_i + 1) << "\t"; 
+        header_file << "NumActs" << (task_i + 1) << ";"; 
+        data_1gen << "Stim" << (task_i + 1) << ";"; 
     }
     
     for (int task_i = 0; task_i < Par.tasks; ++task_i)
     {
-        header_file <<  "Workalloc" << (task_i + 1) << "\t";
-        data_1gen << "Workers" << (task_i + 1) << "\t"; 
+        header_file <<  "Workalloc" << (task_i + 1) << ";";
+        data_1gen << "Workers" << (task_i + 1) << ";"; 
     }
 
     header_file << "Idle"<< "\t" 

@@ -270,8 +270,8 @@ pardict["delta1_baseline"]=[ 2.0 ] # fixed increase in stimulus
 pardict["delta2_baseline"]=[ 2.0 ] # fixed increase in stimulus
 pardict["delta1"]=[ 1.0 ] # fixed increase in stimulus
 pardict["delta2"]=[ 1.0 ] # fixed increase in stimulus
-pardict["alfa1"]=[ 5.0 ] # maximum work efficiency task 1
-pardict["alfa2"]=[ 5.0 ] # maximum work efficiency task 1
+pardict["alfa1"]=[ 6.0 ] # maximum work efficiency task 1
+pardict["alfa2"]=[ 6.0 ] # maximum work efficiency task 1
 pardict["beta1"]=[ 0.0 ] # maximum work efficiency task 1
 pardict["beta2"]=[ 0.0 ] # maximum work efficiency task 1
 pardict["exp_task_1"]=[0.5] # exponent task 1 
@@ -284,7 +284,7 @@ pardict["maxgen"]=[10000] # number of generations
 
 # number of timesteps a worker has to wait 
 # before engaging in another task (this is a cost of switching)
-pardict["timecost"]=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10] 
+pardict["timecost"]=[2] 
 # initial value of the stimulus
 pardict["initStim"]=[0] 
 pardict["p_wait"]=[1.0] 
